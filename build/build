@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+
+require('shelljs/global');
+var paths = require('./paths.js');
+
+build();
+buildTest();
+
+function build() {
+  rm('-rf', paths.targetDirectory);
+  make(paths.root, paths.source, paths.target);
+}
+
+function buildTest() {
+  rm('-rf', paths.testTargetDirectory);
+  make(paths.testDirectory, paths.testSource, paths.testTarget);
+}
+
+function make(directory, source, target) {
+  cd(directory);
+  exec('elm-make --yes ' + source + ' --output ' + target);
+}

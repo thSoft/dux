@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+
+require('shelljs/global');
+var path = require('path');
+var watch = require('node-watch');
+var paths = require('./paths.js');
+var builder = require('./build');
+
+builder.build();
+builder.buildTest();
+watch([paths.sourceDirectory, paths.elmPackage], function (event, filename) {
+  clearScreen();
+  builder.build();
+  builder.buildTest();
+});
+watch([paths.testSourceDirectory, paths.testElmPackage], function (event, filename) {
+  clearScreen();
+  builder.buildTest();
+});
+
+function clearScreen() {
+  console.log('\033[2J');
+}
