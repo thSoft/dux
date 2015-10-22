@@ -31,8 +31,25 @@ init inputText =
       inputText
   }
 
-view : Ref.Model String -> Address Action -> Model -> Html
-view ref address model =
+update : Ref.Model String -> Action -> Model -> Update Model Action
+update ref action model =
+  case action of
+    None ->
+      Component.return model
+    SetInputText inputText ->
+      Component.return
+        { model | inputText <- inputText }
+    Save ->
+      {
+        model =
+          model,
+        effects =
+          ref |> Ref.set model.inputText
+          |> TaskUtil.toEffects None "ElmFire.set failed"
+      }
+
+view : Ref.Model String -> (Ref.Error -> String) -> Address Action -> Model -> Html
+view ref showError address model =
   let result =
         Html.div
           [
@@ -50,7 +67,7 @@ view ref address model =
       string =
         case ref |> Ref.get of
           Err error ->
-            error |> toString
+            error |> showError
           Ok data ->
             data
       handleInput inputText =
@@ -69,23 +86,6 @@ view ref address model =
 inputTextDecoder : Decoder String
 inputTextDecoder =
   Decode.at ["target", "textContent"] Decode.string
-
-update : Ref.Model String -> Action -> Model -> Update Model Action
-update ref action model =
-  case action of
-    None ->
-      Component.return model
-    SetInputText inputText ->
-      Component.return
-        { model | inputText <- inputText }
-    Save ->
-      {
-        model =
-          model,
-        effects =
-          ref |> Ref.set model.inputText
-          |> TaskUtil.toEffects None "ElmFire.set failed"
-      }
 
 stringHandler : Ref.Handler String
 stringHandler =

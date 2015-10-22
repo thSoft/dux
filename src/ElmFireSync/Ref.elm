@@ -36,16 +36,16 @@ type NoData =
   Loading |
   DecodingFailed String
 
-get : Model a -> Result Error a
-get model =
-  (model.state |> Result.formatError NoSubscription)
-  `Result.andThen` (\state ->
-    state.data |> Result.formatError NoData
-  )
-
 type Error =
   NoSubscription NoSubscription |
   NoData NoData
+
+type Action a =
+  None |
+  SubscriptionError ElmFire.Error |
+  Subscribed Subscription |
+  ValueChanged Snapshot |
+  Unsubscribe
 
 init : Address (Action a) -> Handler a -> Location -> Update (Model a) (Action a)
 init address handler location =
@@ -90,13 +90,6 @@ init address handler location =
       )
       |> Effects.task
   }
-
-type Action a =
-  None |
-  SubscriptionError ElmFire.Error |
-  Subscribed Subscription |
-  ValueChanged Snapshot |
-  Unsubscribe
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
@@ -149,6 +142,13 @@ update action model =
           )
           |> Maybe.withDefault Effects.none
       }
+
+get : Model a -> Result Error a
+get model =
+  (model.state |> Result.formatError NoSubscription)
+  `Result.andThen` (\state ->
+    state.data |> Result.formatError NoData
+  )
 
 set : a -> Model a -> Task ElmFire.Error (Model a)
 set value model =

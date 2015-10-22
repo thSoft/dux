@@ -12,13 +12,10 @@ import ElmFireSync.Ref as Ref
 
 type alias Model a =
   {
-    elementHandler: Ref.Handler a,
+    location: Location,
+    childHandler: Ref.Handler a,
     children: Dict String (Child a)
   }
-
-get : Model a -> List (Ref.Model a)
-get model =
-  model.children |> Dict.values |> List.map .ref
 
 type alias Child a =
   {
@@ -26,14 +23,22 @@ type alias Child a =
     ref: Ref.Model a
   }
 
+type Action a =
+  None |
+  ChildAdded Snapshot |
+  ChildRemoved Snapshot |
+  RefAction String (Ref.Action a)
+
 init : Address (Action a) -> Ref.Handler a -> Location -> Update (Model a) (Action a)
-init address elementHandler location =
+init address childHandler location =
   let result =
         {
           model =
             {
-              elementHandler =
-                elementHandler,
+              location =
+                location,
+              childHandler =
+                childHandler,
               children =
                 Dict.empty
             },
@@ -58,12 +63,6 @@ init address elementHandler location =
         |> TaskUtil.toEffects None "ElmFire.subscribe failed"
   in result
 
-type Action a =
-  None |
-  ChildAdded Snapshot |
-  ChildRemoved Snapshot |
-  RefAction String (Ref.Action a)
-
 update : Address (Action a) -> Action a -> Model a -> Update (Model a) (Action a)
 update address action model =
   case action of
@@ -87,7 +86,7 @@ update address action model =
                 childUpdate.model
             }
           childUpdate =
-            snapshot.reference |> ElmFire.location |> Ref.init childAddress model.elementHandler
+            snapshot.reference |> ElmFire.location |> Ref.init childAddress model.childHandler
           childAddress =
             address `Signal.forwardTo` (RefAction url)
       in result
@@ -113,3 +112,7 @@ delegateToChild model transformUpdatedChild url refAction =
           child.ref |> Ref.update refAction
     in result
   ) |> Maybe.withDefault (Component.return model)
+
+get : Model a -> List (Ref.Model a)
+get model =
+  model.children |> Dict.values |> List.map .ref
