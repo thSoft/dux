@@ -1,5 +1,6 @@
 module StructuralEditor.StringEditor where
 
+import String
 import Signal exposing (Address)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -51,15 +52,18 @@ update ref action model =
 view : Ref String -> (Ref.Error -> String) -> Address Action -> Model -> Html
 view ref showError address model =
   let result =
-        Html.div
+        Html.span
           [
             Attributes.contenteditable True,
-            Attributes.attribute "onkeydown"
-              "if ([13].indexOf(event.keyCode) > -1) {
-                event.preventDefault();
-              }", -- XXX https://github.com/evancz/elm-html/issues/83
+            handleKeys False [enter],
             Events.on "input" inputTextDecoder handleInput,
-            Events.on "keyup" Events.keyCode handleKeyUp
+            Events.onKeyUp address keyUpAction,
+            Attributes.style [
+              ("border", "1px solid gray"),
+              ("border-radius", "4px"),
+              ("padding", "2px"),
+              ("margin", "1px")
+            ]
           ]
           [
             string |> Html.text
@@ -72,15 +76,21 @@ view ref showError address model =
             data
       handleInput inputText =
         inputText |> SetInputText |> Signal.message address
-      handleKeyUp key =
-        let result =
-              action |> Signal.message address
-            action =
-              if key == enter.keyCode then
-                Save
-              else
-                None
-        in result
+      keyUpAction key =
+        if key == enter.keyCode then Save else None
+  in result
+
+handleKeys : Bool -> List Key -> Html.Attribute
+handleKeys enable keys =
+  let result =
+        Attributes.attribute "onkeydown"
+          ("if ([" ++ keyCodes ++ "].indexOf(event.keyCode) " ++ operator ++ " -1) {
+            event.preventDefault();
+          }") -- XXX https://github.com/evancz/elm-html/issues/83
+      keyCodes =
+        keys |> List.map (\key -> key.keyCode |> toString) |> String.join ", "
+      operator =
+        if enable then "==" else ">"
   in result
 
 inputTextDecoder : Decoder String

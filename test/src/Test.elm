@@ -3,6 +3,7 @@ module Test where
 import Signal exposing (Mailbox)
 import Task exposing (Task)
 import Html exposing (Html)
+import Html.Attributes as Attributes
 import Effects exposing (Never)
 import StartApp exposing (App)
 import ElmFire exposing (Location)
@@ -26,7 +27,7 @@ app =
       update =
         StringListEditor.update actionMailbox.address,
       view =
-        StringListEditor.view,
+        StringListEditor.view StringListEditor.lineSeparator,
       inputs =
         inputs
     }

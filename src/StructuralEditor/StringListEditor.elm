@@ -1,15 +1,20 @@
 module StructuralEditor.StringListEditor where
 
+import String
 import Dict exposing (Dict)
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Signal exposing (Address, Mailbox)
 import Task exposing (Task)
 import Html exposing (Html)
 import Html.Attributes as Attributes
+import Html.Events as Events
 import Effects exposing (Effects, Never)
 import Debug
 import ElmFire exposing (Location)
+import Keyboard.Keys exposing (..)
 import Component exposing (Update)
+import TaskUtil
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.RefList as RefList exposing (RefList)
 import StructuralEditor.StringEditor as StringEditor
@@ -23,6 +28,7 @@ type alias Model =
 
 type Action =
   None |
+  Delete (RefList.Child String) |
   RefListAction (RefList.Action String) |
   EditorAction EditorId StringEditor.Action
 
@@ -55,6 +61,14 @@ update address action model =
   case action of
     None ->
       Component.return model
+    Delete child ->
+      {
+        model =
+          model,
+        effects =
+          child.ref |> Ref.delete
+          |> TaskUtil.toEffects None "ElmFire.remove failed"
+      }
     RefListAction refListAction ->
       let updateResult =
             {
@@ -115,29 +129,59 @@ update address action model =
                 model.adder |> StringEditor.update (adderRef address model) stringEditorAction
           in result
 
-view : Address Action -> Model -> Html
-view address model =
+view : Html -> Address Action -> Model -> Html
+view separator address model =
   let result =
         Html.div
           []
-          (children ++ [adder])
+          (children ++ [adder address model])
       children =
         model.refList.children |> Dict.toList |> List.map (\(url, child) ->
-          model.editors |> Dict.get url |> Maybe.map (\stringEditor ->
-            stringEditor
-            |> StringEditor.view
-              child.ref
-              toString
-              (address |> forwardToStringEditor (Existing url))
-          ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
-        )
-      adder =
-        model.adder
-        |> StringEditor.view
-          (adderRef address model)
-          (always "")
-          (address |> forwardToStringEditor Adder)
+          [
+            remover delete address child,
+            editor address model url child,
+            remover backspace address child
+          ]
+        ) |> List.intersperse [separator] |> List.concat
   in result
+
+lineSeparator : Html
+lineSeparator =
+  Html.br
+    [
+      Attributes.style [
+        ("line-height", "1.5")
+      ]
+    ]
+    []
+
+editor : Address Action -> Model -> String -> RefList.Child String -> Html
+editor address model url child =
+  model.editors |> Dict.get url |> Maybe.map (\stringEditor ->
+    stringEditor
+    |> StringEditor.view
+      child.ref
+      toString
+      (address |> forwardToStringEditor (Existing url))
+  ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
+
+remover : Key -> Address Action -> RefList.Child String -> Html
+remover triggeringKey address child =
+  Html.span
+    [
+      Attributes.contenteditable True,
+      StringEditor.handleKeys True [triggeringKey, tab],
+      Events.onKeyUp address (\keyCode -> if keyCode == triggeringKey.keyCode then Delete child else None)
+    ]
+    []
+
+adder : Address Action -> Model -> Html
+adder address model =
+  model.adder
+  |> StringEditor.view
+    (adderRef address model)
+    (always "")
+    (address |> forwardToStringEditor Adder)
 
 adderRef : Address Action -> Model -> Ref String
 adderRef address model =
