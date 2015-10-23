@@ -58,13 +58,7 @@ view ref showError address model =
             Attributes.contenteditable True,
             handleKeys False [enter.keyCode],
             Events.on "input" inputTextDecoder handleInput,
-            Events.onKeyUp address keyUpAction,
-            Attributes.style [
-              ("border", "1px solid gray"),
-              ("border-radius", "4px"),
-              ("padding", "2px"),
-              ("margin", "1px")
-            ]
+            Events.onKeyUp address keyUpAction
           ]
           [
             string |> Html.text

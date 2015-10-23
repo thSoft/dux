@@ -21,6 +21,10 @@ import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.RefList as RefList exposing (RefList)
 import StructuralEditor.StringEditor as StringEditor
 
+-- TODO proper priority for insertion
+-- TODO focus adder when showing it
+-- TODO indeterministic content race condition in Firefox
+
 type alias Model =
   {
     refList: RefList String,
@@ -210,6 +214,21 @@ editor address model url child =
       toString
       (address |> forwardToStringEditor (Existing url))
   ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
+  |> wrapEditor False
+
+wrapEditor : Bool -> Html -> Html
+wrapEditor adder editor =
+  Html.div
+    [
+      Attributes.style [
+        ("display", "inline"),
+        ("border", "1px solid " ++ (if adder then "lightgray" else "gray")),
+        ("border-radius", "4px"),
+        ("padding", "2px"),
+        ("margin", "1px")
+      ]
+    ]
+    [editor]
 
 transformer : Separator -> Bool -> Address Action -> Model -> String -> RefList.Child String -> Html
 transformer separator after address model url child =
@@ -226,13 +245,16 @@ transformer separator after address model url child =
       keyUpAction keyCode =
         if keyCode == removerKey.keyCode then
           Delete child
+        else if keyCode == separator.keyCode then
+          SetAdderPosition adderPosition
+        else if keyCode == adderHiderKey.keyCode then
+          SetAdderPosition Nowhere
         else
-          if keyCode == separator.keyCode then
-            SetAdderPosition adderPosition
-          else
-            None
+          None
       removerKey =
         if after then backspace else delete
+      adderHiderKey =
+        if after then delete else backspace
       adderPosition =
         if after then After url else Before url
   in result
@@ -244,6 +266,7 @@ adder address model =
     (adderRef address model)
     (always "")
     (address |> forwardToStringEditor Adder)
+  |> wrapEditor True
 
 adderRef : Address Action -> Model -> Ref String
 adderRef address model =
