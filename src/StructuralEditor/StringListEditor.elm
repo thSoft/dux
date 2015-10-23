@@ -148,8 +148,38 @@ update address action model =
                 model.adder |> StringEditor.update (adderRef address model) stringEditorAction
           in result
 
-view : String -> KeyCode -> Address Action -> Model -> Html
-view separator separatorKeyCode address model =
+type alias Separator =
+  {
+    html: Html,
+    keyCode: KeyCode
+  }
+
+commaSeparator : Separator
+commaSeparator =
+  {
+    html =
+      "," |> Html.text,
+    keyCode =
+      188
+  }
+
+lineSeparator : Separator
+lineSeparator =
+  {
+    html =
+      Html.br
+        [
+          Attributes.style [
+            ("line-height", "1.4")
+          ]
+        ]
+        [],
+    keyCode =
+      13
+  }
+
+view : Separator -> Address Action -> Model -> Html
+view separator address model =
   let result =
         Html.div
           []
@@ -161,14 +191,12 @@ view separator separatorKeyCode address model =
           model.refList.children |> Dict.toList |> List.map (\(url, child) ->
             maybeAdder (Before url) ++
             [
-              transformer separator separatorKeyCode False address model url child,
+              transformer separator False address model url child,
               editor address model url child,
-              transformer separator separatorKeyCode True address model url child
+              transformer separator True address model url child
             ] ++
             maybeAdder (After url)
-          ) |> List.intersperse [separatorHtml] |> List.concat
-      separatorHtml =
-        separator |> Html.text
+          ) |> List.intersperse [separator.html] |> List.concat
       maybeAdder adderPosition =
         if model.adderPosition == adderPosition then [adder address model] else []
   in result
@@ -183,8 +211,8 @@ editor address model url child =
       (address |> forwardToStringEditor (Existing url))
   ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
 
-transformer : String -> KeyCode -> Bool -> Address Action -> Model -> String -> RefList.Child String -> Html
-transformer separator separatorKeyCode after address model url child =
+transformer : Separator -> Bool -> Address Action -> Model -> String -> RefList.Child String -> Html
+transformer separator after address model url child =
   let result =
         Html.span
           [
@@ -193,13 +221,13 @@ transformer separator separatorKeyCode after address model url child =
             Events.onKeyUp address keyUpAction
           ]
           (if (after && model.adderPosition == After url) || (not after && model.adderPosition == Before url) then
-            [separator |> Html.text]
+            [separator.html]
           else [])
       keyUpAction keyCode =
         if keyCode == removerKey.keyCode then
           Delete child
         else
-          if keyCode == separatorKeyCode then
+          if keyCode == separator.keyCode then
             SetAdderPosition adderPosition
           else
             None
