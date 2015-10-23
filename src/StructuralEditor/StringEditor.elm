@@ -1,5 +1,6 @@
 module StructuralEditor.StringEditor where
 
+import Keyboard exposing (KeyCode)
 import String
 import Signal exposing (Address)
 import Json.Decode as Decode exposing (Decoder)
@@ -55,7 +56,7 @@ view ref showError address model =
         Html.span
           [
             Attributes.contenteditable True,
-            handleKeys False [enter],
+            handleKeys False [enter.keyCode],
             Events.on "input" inputTextDecoder handleInput,
             Events.onKeyUp address keyUpAction,
             Attributes.style [
@@ -80,15 +81,15 @@ view ref showError address model =
         if key == enter.keyCode then Save else None
   in result
 
-handleKeys : Bool -> List Key -> Html.Attribute
-handleKeys enable keys =
+handleKeys : Bool -> List KeyCode -> Html.Attribute
+handleKeys enable keyCodes =
   let result =
         Attributes.attribute "onkeydown"
-          ("if ([" ++ keyCodes ++ "].indexOf(event.keyCode) " ++ operator ++ " -1) {
+          ("if ([" ++ keyCodesPrinted ++ "].indexOf(event.keyCode) " ++ operator ++ " -1) {
             event.preventDefault();
           }") -- XXX https://github.com/evancz/elm-html/issues/83
-      keyCodes =
-        keys |> List.map (\key -> key.keyCode |> toString) |> String.join ", "
+      keyCodesPrinted =
+        keyCodes |> List.map toString |> String.join ", "
       operator =
         if enable then "==" else ">"
   in result

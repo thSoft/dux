@@ -27,7 +27,7 @@ app =
       update =
         StringListEditor.update actionMailbox.address,
       view =
-        StringListEditor.view StringListEditor.lineSeparator,
+        StringListEditor.view "," 188,
       inputs =
         inputs
     }

@@ -1,5 +1,7 @@
 module StructuralEditor.StringListEditor where
 
+import Char
+import Keyboard exposing (KeyCode)
 import String
 import Dict exposing (Dict)
 import Json.Decode as Decode
@@ -23,18 +25,25 @@ type alias Model =
   {
     refList: RefList String,
     editors: Dict String StringEditor.Model,
-    adder: StringEditor.Model
+    adder: StringEditor.Model,
+    adderPosition: AdderPosition
   }
 
 type Action =
   None |
   Delete (RefList.Child String) |
+  SetAdderPosition AdderPosition |
   RefListAction (RefList.Action String) |
   EditorAction EditorId StringEditor.Action
 
 type EditorId =
   Existing String |
   Adder
+
+type AdderPosition =
+  Nowhere |
+  Before String |
+  After String
 
 init : Address Action -> Location -> Update Model Action
 init address location =
@@ -47,7 +56,9 @@ init address location =
               editors =
                 Dict.empty,
               adder =
-                StringEditor.init ""
+                StringEditor.init "",
+              adderPosition =
+                Nowhere
             },
           effects =
             refList.effects |> Effects.map RefListAction
@@ -69,6 +80,9 @@ update address action model =
           child.ref |> Ref.delete
           |> TaskUtil.toEffects None "ElmFire.remove failed"
       }
+    SetAdderPosition adderPosition ->
+      Component.return
+        { model | adderPosition <- adderPosition }
     RefListAction refListAction ->
       let updateResult =
             {
@@ -121,7 +135,12 @@ update address action model =
           let result =
                 {
                   model =
-                    { model | adder <- adderUpdate.model },
+                    { model |
+                      adder <-
+                        adderUpdate.model,
+                      adderPosition <-
+                        if stringEditorAction == StringEditor.Save then Nowhere else model.adderPosition
+                    },
                   effects =
                     adderUpdate.effects |> Effects.map (EditorAction Adder)
                 }
@@ -129,31 +148,30 @@ update address action model =
                 model.adder |> StringEditor.update (adderRef address model) stringEditorAction
           in result
 
-view : Html -> Address Action -> Model -> Html
-view separator address model =
+view : String -> KeyCode -> Address Action -> Model -> Html
+view separator separatorKeyCode address model =
   let result =
         Html.div
           []
-          (children ++ [adder address model])
+          children
       children =
-        model.refList.children |> Dict.toList |> List.map (\(url, child) ->
-          [
-            remover delete address child,
-            editor address model url child,
-            remover backspace address child
-          ]
-        ) |> List.intersperse [separator] |> List.concat
+        if model.refList.children |> Dict.isEmpty then
+          [adder address model]
+        else
+          model.refList.children |> Dict.toList |> List.map (\(url, child) ->
+            maybeAdder (Before url) ++
+            [
+              transformer separator separatorKeyCode False address model url child,
+              editor address model url child,
+              transformer separator separatorKeyCode True address model url child
+            ] ++
+            maybeAdder (After url)
+          ) |> List.intersperse [separatorHtml] |> List.concat
+      separatorHtml =
+        separator |> Html.text
+      maybeAdder adderPosition =
+        if model.adderPosition == adderPosition then [adder address model] else []
   in result
-
-lineSeparator : Html
-lineSeparator =
-  Html.br
-    [
-      Attributes.style [
-        ("line-height", "1.5")
-      ]
-    ]
-    []
 
 editor : Address Action -> Model -> String -> RefList.Child String -> Html
 editor address model url child =
@@ -165,15 +183,31 @@ editor address model url child =
       (address |> forwardToStringEditor (Existing url))
   ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
 
-remover : Key -> Address Action -> RefList.Child String -> Html
-remover triggeringKey address child =
-  Html.span
-    [
-      Attributes.contenteditable True,
-      StringEditor.handleKeys True [triggeringKey, tab],
-      Events.onKeyUp address (\keyCode -> if keyCode == triggeringKey.keyCode then Delete child else None)
-    ]
-    []
+transformer : String -> KeyCode -> Bool -> Address Action -> Model -> String -> RefList.Child String -> Html
+transformer separator separatorKeyCode after address model url child =
+  let result =
+        Html.span
+          [
+            Attributes.contenteditable True,
+            StringEditor.handleKeys True [removerKey.keyCode, tab.keyCode],
+            Events.onKeyUp address keyUpAction
+          ]
+          (if (after && model.adderPosition == After url) || (not after && model.adderPosition == Before url) then
+            [separator |> Html.text]
+          else [])
+      keyUpAction keyCode =
+        if keyCode == removerKey.keyCode then
+          Delete child
+        else
+          if keyCode == separatorKeyCode then
+            SetAdderPosition adderPosition
+          else
+            None
+      removerKey =
+        if after then backspace else delete
+      adderPosition =
+        if after then After url else Before url
+  in result
 
 adder : Address Action -> Model -> Html
 adder address model =
