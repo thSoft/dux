@@ -8,9 +8,9 @@ import Debug
 import ElmFire exposing (Location, Priority, Snapshot)
 import TaskUtil
 import Component exposing (Update)
-import ElmFireSync.Ref as Ref
+import ElmFireSync.Ref as Ref exposing (Ref)
 
-type alias Model a =
+type alias RefList a =
   {
     location: Location,
     childHandler: Ref.Handler a,
@@ -20,7 +20,7 @@ type alias Model a =
 type alias Child a =
   {
     priority: Priority,
-    ref: Ref.Model a
+    ref: Ref a
   }
 
 type Action a =
@@ -29,7 +29,7 @@ type Action a =
   ChildRemoved Snapshot |
   RefAction String (Ref.Action a)
 
-init : Address (Action a) -> Ref.Handler a -> Location -> Update (Model a) (Action a)
+init : Address (Action a) -> Ref.Handler a -> Location -> Update (RefList a) (Action a)
 init address childHandler location =
   let result =
         {
@@ -63,7 +63,7 @@ init address childHandler location =
         |> TaskUtil.toEffects None "ElmFire.subscribe failed"
   in result
 
-update : Address (Action a) -> Action a -> Model a -> Update (Model a) (Action a)
+update : Address (Action a) -> Action a -> RefList a -> Update (RefList a) (Action a)
 update address action model =
   case action of
     None ->
@@ -95,7 +95,7 @@ update address action model =
     RefAction url refAction ->
       delegateToChild model Just url refAction
 
-delegateToChild : Model a -> (Child a -> Maybe (Child a)) -> String -> Ref.Action a -> Update (Model a) (Action a)
+delegateToChild : RefList a -> (Child a -> Maybe (Child a)) -> String -> Ref.Action a -> Update (RefList a) (Action a)
 delegateToChild model transformUpdatedChild url refAction =
   model.children |> Dict.get url |> Maybe.map (\child ->
     let result =
@@ -113,6 +113,6 @@ delegateToChild model transformUpdatedChild url refAction =
     in result
   ) |> Maybe.withDefault (Component.return model)
 
-get : Model a -> List (Ref.Model a)
+get : RefList a -> List (Ref a)
 get model =
   model.children |> Dict.values |> List.map .ref

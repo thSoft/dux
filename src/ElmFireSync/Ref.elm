@@ -9,7 +9,7 @@ import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), Err
 import TaskUtil
 import Component exposing (Update)
 
-type alias Model a =
+type alias Ref a =
   {
     location: Location,
     handler: Handler a,
@@ -47,7 +47,7 @@ type Action a =
   ValueChanged Snapshot |
   Unsubscribe
 
-init : Address (Action a) -> Handler a -> Location -> Update (Model a) (Action a)
+init : Address (Action a) -> Handler a -> Location -> Update (Ref a) (Action a)
 init address handler location =
   {
     model =
@@ -93,7 +93,7 @@ init address handler location =
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : (Action a) -> (Model a) -> Update (Model a) (Action a)
+update : (Action a) -> (Ref a) -> Update (Ref a) (Action a)
 update action model =
   case action of
     None ->
@@ -143,14 +143,14 @@ update action model =
           |> Maybe.withDefault Effects.none
       }
 
-get : Model a -> Result Error a
+get : Ref a -> Result Error a
 get model =
   (model.state |> Result.formatError NoSubscription)
   `Result.andThen` (\state ->
     state.data |> Result.formatError NoData
   )
 
-set : a -> Model a -> Task ElmFire.Error (Model a)
+set : a -> Ref a -> Task ElmFire.Error (Ref a)
 set value model =
   let result =
         ElmFire.set json model.location
@@ -159,7 +159,7 @@ set value model =
         value |> model.handler.encode
   in result
 
-delete : Model a -> Task ElmFire.Error (Model a)
+delete : Ref a -> Task ElmFire.Error (Ref a)
 delete model =
   ElmFire.remove model.location
   |> Task.map (always model)

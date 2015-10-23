@@ -1,4 +1,4 @@
-module Dux.Editor.StringListEditor where
+module StructuralEditor.StringListEditor where
 
 import Dict exposing (Dict)
 import Json.Decode as Decode
@@ -10,13 +10,13 @@ import Effects exposing (Effects, Never)
 import Debug
 import ElmFire exposing (Location)
 import Component exposing (Update)
-import ElmFireSync.Ref as Ref
-import ElmFireSync.RefList as RefList
-import Dux.Editor.StringEditor as StringEditor
+import ElmFireSync.Ref as Ref exposing (Ref)
+import ElmFireSync.RefList as RefList exposing (RefList)
+import StructuralEditor.StringEditor as StringEditor
 
 type alias Model =
   {
-    refList: RefList.Model String,
+    refList: RefList String,
     editors: Dict String StringEditor.Model,
     adder: StringEditor.Model
   }
@@ -139,7 +139,7 @@ view address model =
           (address |> forwardToStringEditor Adder)
   in result
 
-adderRef : Address Action -> Model -> Ref.Model String
+adderRef : Address Action -> Model -> Ref String
 adderRef address model =
   Ref.init
     adderRefActionMailbox.address -- dummy

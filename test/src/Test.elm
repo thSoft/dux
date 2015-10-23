@@ -7,7 +7,7 @@ import Effects exposing (Never)
 import StartApp exposing (App)
 import ElmFire exposing (Location)
 import Component
-import Dux.Editor.StringListEditor as StringListEditor
+import StructuralEditor.StringListEditor as StringListEditor
 
 main : Signal Html
 main =

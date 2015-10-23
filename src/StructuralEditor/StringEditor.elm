@@ -1,4 +1,4 @@
-module Dux.Editor.StringEditor where
+module StructuralEditor.StringEditor where
 
 import Signal exposing (Address)
 import Json.Decode as Decode exposing (Decoder)
@@ -12,7 +12,7 @@ import Debug
 import Keyboard.Keys exposing (..)
 import TaskUtil
 import Component exposing (Update)
-import ElmFireSync.Ref as Ref
+import ElmFireSync.Ref as Ref exposing (Ref)
 
 type alias Model =
   {
@@ -31,7 +31,7 @@ init inputText =
       inputText
   }
 
-update : Ref.Model String -> Action -> Model -> Update Model Action
+update : Ref String -> Action -> Model -> Update Model Action
 update ref action model =
   case action of
     None ->
@@ -48,7 +48,7 @@ update ref action model =
           |> TaskUtil.toEffects None "ElmFire.set failed"
       }
 
-view : Ref.Model String -> (Ref.Error -> String) -> Address Action -> Model -> Html
+view : Ref String -> (Ref.Error -> String) -> Address Action -> Model -> Html
 view ref showError address model =
   let result =
         Html.div
