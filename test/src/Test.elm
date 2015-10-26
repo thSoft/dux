@@ -3,10 +3,8 @@ module Test where
 import Signal exposing (Mailbox)
 import Task exposing (Task)
 import Html exposing (Html)
-import Html.Attributes as Attributes
 import Effects exposing (Never)
 import StartApp exposing (App)
-import ElmFire exposing (Location)
 import Component
 import StructuralEditor.StringListEditor as StringListEditor
 
@@ -18,12 +16,18 @@ port tasks : Signal (Task Never ())
 port tasks =
   app.tasks
 
+type alias Model =
+  StringListEditor.Model
+
+type alias Action =
+  StringListEditor.Action
+
 app : App Model
 app =
   Component.run
     {
       init =
-        StringListEditor.init actionMailbox.address location,
+        StringListEditor.init actionMailbox.address url,
       update =
         StringListEditor.update actionMailbox.address,
       view =
@@ -32,20 +36,14 @@ app =
         inputs
     }
 
-location : Location
-location =
-  "https://thsoft.firebaseio.com/DUX/test" |> ElmFire.fromUrl
-
-inputs : List (Signal Action)
-inputs =
-  [actionMailbox.signal]
-
 actionMailbox : Mailbox Action
 actionMailbox =
   Signal.mailbox StringListEditor.None
 
-type alias Model =
-  StringListEditor.Model
+url : String
+url =
+  "https://thsoft.firebaseio.com/DUX/test"
 
-type alias Action =
-  StringListEditor.Action
+inputs : List (Signal Action)
+inputs =
+  [actionMailbox.signal]

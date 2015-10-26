@@ -1,20 +1,18 @@
 module StructuralEditor.StringEditor where
 
 import Keyboard exposing (KeyCode)
+import Json.Decode as Decode exposing (Decoder)
 import String
 import Signal exposing (Address)
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
-import Task
-import Effects exposing (Effects)
-import Debug
+import Task exposing (Task)
+import Effects exposing (Never)
 import Keyboard.Keys exposing (..)
-import TaskUtil
 import Component exposing (Update)
-import ElmFireSync.Ref as Ref exposing (Ref)
+
+-- TODO indeterministic content race condition in Firefox
 
 type alias Model =
   {
@@ -33,8 +31,8 @@ init inputText =
       inputText
   }
 
-update : Ref String -> Action -> Model -> Update Model Action
-update ref action model =
+update : (Model -> Task Never Action) -> Action -> Model -> Update Model Action
+update onSave action model =
   case action of
     None ->
       Component.return model
@@ -46,12 +44,11 @@ update ref action model =
         model =
           model,
         effects =
-          ref |> Ref.set model.inputText
-          |> TaskUtil.toEffects None "ElmFire.set failed"
+          onSave model |> Effects.task
       }
 
-view : Ref String -> (Ref.Error -> String) -> Address Action -> Model -> Html
-view ref showError address model =
+view : String -> Address Action -> Model -> Html
+view initialInputText address model =
   let result =
         Html.span
           [
@@ -61,14 +58,8 @@ view ref showError address model =
             Events.onKeyUp address keyUpAction
           ]
           [
-            string |> Html.text
+            initialInputText |> Html.text
           ]
-      string =
-        case ref |> Ref.get of
-          Err error ->
-            error |> showError
-          Ok data ->
-            data
       handleInput inputText =
         inputText |> SetInputText |> Signal.message address
       keyUpAction key =
@@ -91,12 +82,3 @@ handleKeys enable keyCodes =
 inputTextDecoder : Decoder String
 inputTextDecoder =
   Decode.at ["target", "textContent"] Decode.string
-
-stringHandler : Ref.Handler String
-stringHandler =
-  {
-    decoder =
-      Decode.string,
-    encode =
-      Encode.string
-  }

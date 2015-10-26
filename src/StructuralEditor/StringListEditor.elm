@@ -1,6 +1,8 @@
 module StructuralEditor.StringListEditor where
 
-import Char
+import Debug
+import Array
+import Random
 import Keyboard exposing (KeyCode)
 import String
 import Dict exposing (Dict)
@@ -12,31 +14,35 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Effects exposing (Effects, Never)
-import Debug
-import ElmFire exposing (Location)
+import ElmFire exposing (Location, Reference, Priority(..))
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 import TaskUtil
+import ElmFireSync.Handler as Handler
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.RefList as RefList exposing (RefList)
 import StructuralEditor.StringEditor as StringEditor
 
--- TODO proper priority for insertion
--- TODO focus adder when showing it
--- TODO indeterministic content race condition in Firefox
+-- TODO implement priority fixing
+-- TODO implement move
+-- TODO fix focus behavior
 
 type alias Model =
   {
     refList: RefList String,
     editors: Dict String StringEditor.Model,
     adder: StringEditor.Model,
-    adderPosition: AdderPosition
+    adderPosition: Maybe Position
   }
+
+type Position =
+  Before String |
+  After String
 
 type Action =
   None |
-  Delete (RefList.Child String) |
-  SetAdderPosition AdderPosition |
+  Delete (RefList.Item String) |
+  SetAdderPosition (Maybe Position) |
   RefListAction (RefList.Action String) |
   EditorAction EditorId StringEditor.Action
 
@@ -44,13 +50,8 @@ type EditorId =
   Existing String |
   Adder
 
-type AdderPosition =
-  Nowhere |
-  Before String |
-  After String
-
-init : Address Action -> Location -> Update Model Action
-init address location =
+init : Address Action -> String -> Update Model Action
+init address url =
   let result =
         {
           model =
@@ -62,13 +63,13 @@ init address location =
               adder =
                 StringEditor.init "",
               adderPosition =
-                Nowhere
+                Nothing
             },
           effects =
             refList.effects |> Effects.map RefListAction
         }
       refList =
-        RefList.init (address |> forwardToRefList) StringEditor.stringHandler location
+        RefList.init (address |> forwardToRefList) Handler.stringHandler url
   in result
 
 update : Address Action -> Action -> Model -> Update Model Action
@@ -76,13 +77,14 @@ update address action model =
   case action of
     None ->
       Component.return model
-    Delete child ->
+    Delete item ->
       {
         model =
           model,
         effects =
-          child.ref |> Ref.delete
-          |> TaskUtil.toEffects None "ElmFire.remove failed"
+          item.ref |> Ref.delete
+          |> TaskUtil.swallowError None "ElmFire.remove failed"
+          |> Effects.task
       }
     SetAdderPosition adderPosition ->
       Component.return
@@ -93,20 +95,20 @@ update address action model =
               model =
                 { model |
                   refList <- refListUpdate.model,
-                  editors <- updatedStringEditors },
+                  editors <- updatedEditors },
               effects =
                 refListUpdate.effects |> Effects.map RefListAction
             }
           refListUpdate =
             RefList.update (address |> forwardToRefList) refListAction model.refList
-          updatedStringEditors =
+          updatedEditors =
             case refListAction of
               RefList.ChildAdded snapshot ->
                 let result =
-                      model.editors |> Dict.insert (snapshot.reference |> ElmFire.toUrl) stringEditor
-                    stringEditor =
+                      model.editors |> Dict.insert (snapshot.reference |> ElmFire.toUrl) editor
+                    editor =
                       snapshot.value
-                      |> Decode.decodeValue (StringEditor.stringHandler |> .decoder)
+                      |> Decode.decodeValue (Handler.stringHandler |> .decoder)
                       |> Result.toMaybe
                       |> Maybe.withDefault ""
                       |> StringEditor.init
@@ -116,22 +118,25 @@ update address action model =
               _ ->
                 model.editors
       in updateResult
-    EditorAction id stringEditorAction ->
+    EditorAction id editorAction ->
       case id of
         Existing url ->
-          (model.editors |> Dict.get url) `Maybe.andThen` (\stringEditor ->
-            model.refList.children |> Dict.get url |> Maybe.map (\child ->
+          (model.editors |> Dict.get url) `Maybe.andThen` (\editor ->
+            model.refList.items |> Dict.get url |> Maybe.map (\item ->
               let result =
                     {
                       model =
-                        { model | editors <- updatedStringEditors },
+                        { model | editors <- updatedEditors },
                       effects =
-                        stringEditorUpdate.effects |> Effects.map (EditorAction (Existing url))
+                        editorUpdate.effects |> Effects.map (EditorAction (Existing url))
                     }
-                  updatedStringEditors =
-                    model.editors |> Dict.insert url stringEditorUpdate.model
-                  stringEditorUpdate =
-                    stringEditor |> StringEditor.update child.ref stringEditorAction
+                  updatedEditors =
+                    model.editors |> Dict.insert url editorUpdate.model
+                  editorUpdate =
+                    editor |> StringEditor.update onSave editorAction
+                  onSave editorModel =
+                      item.ref |> Ref.set (Just item.priority) editorModel.inputText
+                    |> TaskUtil.swallowError StringEditor.None "ElmFire.setWithPriority failed"
               in result
             )
           ) |> Maybe.withDefault (Component.return model)
@@ -143,13 +148,22 @@ update address action model =
                       adder <-
                         adderUpdate.model,
                       adderPosition <-
-                        if stringEditorAction == StringEditor.Save then Nowhere else model.adderPosition
+                        if editorAction == StringEditor.Save then Nothing else model.adderPosition
                     },
                   effects =
                     adderUpdate.effects |> Effects.map (EditorAction Adder)
                 }
               adderUpdate =
-                model.adder |> StringEditor.update (adderRef address model) stringEditorAction
+                model.adder |> StringEditor.update onSave editorAction
+              onSave editorModel =
+                model.refList.url
+                |> ElmFire.fromUrl
+                |> ElmFire.push
+                |> ElmFire.open
+                |> TaskUtil.andThen (\reference ->
+                  reference |> adderRef |> Ref.set (Just <| adderPriority model) editorModel.inputText
+                )
+                |> TaskUtil.swallowError StringEditor.None "ElmFire.setWithPriority failed"
           in result
 
 type alias Separator =
@@ -187,51 +201,69 @@ view separator address model =
   let result =
         Html.div
           []
-          children
-      children =
-        if model.refList.children |> Dict.isEmpty then
-          [adder address model]
+          itemViews
+      itemViews =
+        if items |> List.isEmpty then
+          [viewAdder address model]
         else
-          model.refList.children |> Dict.toList |> List.map (\(url, child) ->
-            maybeAdder (Before url) ++
-            [
-              transformer separator False address model url child,
-              editor address model url child,
-              transformer separator True address model url child
-            ] ++
-            maybeAdder (After url)
+          items |> List.map (\item ->
+            maybeAdder (Before item.ref.url)
+            ++ [
+              viewTransformer False separator address model item,
+              viewEditor address model item,
+              viewTransformer True separator address model item
+            ]
+            ++ maybeAdder (After item.ref.url)
           ) |> List.intersperse [separator.html] |> List.concat
+      items =
+        model.refList |> RefList.get
       maybeAdder adderPosition =
-        if model.adderPosition == adderPosition then [adder address model] else []
+        if model.adderPosition == Just adderPosition then [viewAdder address model] else []
   in result
 
-editor : Address Action -> Model -> String -> RefList.Child String -> Html
-editor address model url child =
-  model.editors |> Dict.get url |> Maybe.map (\stringEditor ->
-    stringEditor
-    |> StringEditor.view
-      child.ref
-      toString
-      (address |> forwardToStringEditor (Existing url))
-  ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
-  |> wrapEditor False
+viewEditor : Address Action -> Model -> RefList.Item String -> Html
+viewEditor address model item =
+  let result =
+        model.editors |> Dict.get url |> Maybe.map (\editor ->
+          editor
+          |> StringEditor.view
+            initialInputText
+            (address |> forwardToEditor (Existing url))
+          |> wrapEditorHtml (Just item.ref) editor
+        ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
+      initialInputText =
+        case item.ref |> Ref.get of
+          Err error ->
+            error |> toString
+          Ok string ->
+            string
+      url =
+        item.ref.url
+  in result
 
-wrapEditor : Bool -> Html -> Html
-wrapEditor adder editor =
-  Html.div
-    [
-      Attributes.style [
-        ("display", "inline"),
-        ("border", "1px solid " ++ (if adder then "lightgray" else "gray")),
-        ("border-radius", "4px"),
-        ("padding", "2px"),
-        ("margin", "1px")
-      ]
-    ]
-    [editor]
+wrapEditorHtml : Maybe (Ref String) -> StringEditor.Model -> Html -> Html
+wrapEditorHtml maybeRef editor editorHtml =
+  let result =
+        Html.div
+          [
+            Attributes.style [
+              ("display", "inline"),
+              ("border", "1px solid " ++ borderColor),
+              ("border-radius", "4px"),
+              ("padding", "2px"),
+              ("margin", "1px")
+            ]
+          ]
+          [editorHtml]
+      borderColor =
+        maybeRef |> Maybe.map (\ref ->
+          if (ref |> Ref.get) /= Ok editor.inputText then "red"
+          else "gray"
+        ) |> Maybe.withDefault "lightgray"
+  in result
 
-transformer : Separator -> Bool -> Address Action -> Model -> String -> RefList.Child String -> Html
-transformer separator after address model url child =
+viewTransformer : Bool -> Separator -> Address Action -> Model -> RefList.Item String -> Html
+viewTransformer after separator address model item =
   let result =
         Html.span
           [
@@ -239,51 +271,88 @@ transformer separator after address model url child =
             StringEditor.handleKeys True [removerKey.keyCode, tab.keyCode],
             Events.onKeyUp address keyUpAction
           ]
-          (if (after && model.adderPosition == After url) || (not after && model.adderPosition == Before url) then
-            [separator.html]
-          else [])
+          maybeSeparator
       keyUpAction keyCode =
         if keyCode == removerKey.keyCode then
-          Delete child
+          Delete item
         else if keyCode == separator.keyCode then
-          SetAdderPosition adderPosition
-        else if keyCode == adderHiderKey.keyCode then
-          SetAdderPosition Nowhere
+          SetAdderPosition (Just adderPosition)
+        else if keyCode == adderHidingKey.keyCode then
+          SetAdderPosition Nothing
         else
           None
       removerKey =
         if after then backspace else delete
-      adderHiderKey =
+      adderHidingKey =
         if after then delete else backspace
       adderPosition =
         if after then After url else Before url
+      maybeSeparator =
+        if (after && model.adderPosition == Just (After url)) || (not after && model.adderPosition == Just (Before url)) then
+          [separator.html]
+        else []
+      url =
+        item.ref.url
   in result
 
-adder : Address Action -> Model -> Html
-adder address model =
+viewAdder : Address Action -> Model -> Html
+viewAdder address model =
   model.adder
   |> StringEditor.view
-    (adderRef address model)
-    (always "")
-    (address |> forwardToStringEditor Adder)
-  |> wrapEditor True
+    ""
+    (address |> forwardToEditor Adder)
+  |> wrapEditorHtml Nothing model.adder
 
-adderRef : Address Action -> Model -> Ref String
-adderRef address model =
+adderRef : Reference -> Ref String
+adderRef reference =
   Ref.init
     adderRefActionMailbox.address -- dummy
-    StringEditor.stringHandler
-    (model.refList.location |> ElmFire.push)
+    Handler.stringHandler
+    (reference |> ElmFire.toUrl)
   |> .model
 
 adderRefActionMailbox : Mailbox (Ref.Action String)
 adderRefActionMailbox =
   Signal.mailbox Ref.None
 
+adderPriority : Model -> Priority
+adderPriority model =
+  model.adderPosition |> Maybe.map (\adderPosition ->
+    let result =
+          ((getPriorityAt indexBefore) + (getPriorityAt indexAfter)) / 2 |> NumberPriority
+        getPriorityAt index =
+          items |> Array.fromList |> Array.get index |> Maybe.map (\item ->
+            case item.priority of
+              NumberPriority priority ->
+                priority
+              _ ->
+                0.0
+          ) |> Maybe.withDefault ((if index < 0 then Random.minInt else Random.maxInt) |> toFloat)
+        indicesByUrl =
+          items |> List.indexedMap (\index item ->
+            (item.ref.url, index)
+          ) |> Dict.fromList
+        items =
+          model.refList |> RefList.get
+        indexBefore =
+          case adderPosition of
+            After urlBefore ->
+              indicesByUrl |> Dict.get urlBefore |> Maybe.withDefault Random.minInt
+            Before urlAfter ->
+              indicesByUrl |> Dict.get urlAfter |> Maybe.map (\otherIndex -> otherIndex - 1) |> Maybe.withDefault Random.minInt
+        indexAfter =
+          case adderPosition of
+            Before urlAfter ->
+              indicesByUrl |> Dict.get urlAfter |> Maybe.withDefault Random.maxInt
+            After urlBefore ->
+              indicesByUrl |> Dict.get urlBefore |> Maybe.map (\otherIndex -> otherIndex + 1) |> Maybe.withDefault Random.maxInt
+    in result
+  ) |> Maybe.withDefault (0.0 |> NumberPriority)
+
 forwardToRefList : Address Action -> Address (RefList.Action String)
 forwardToRefList address =
   Signal.forwardTo address RefListAction
 
-forwardToStringEditor : EditorId -> Address Action -> Address StringEditor.Action
-forwardToStringEditor id address =
+forwardToEditor : EditorId -> Address Action -> Address StringEditor.Action
+forwardToEditor id address =
   Signal.forwardTo address (EditorAction id)

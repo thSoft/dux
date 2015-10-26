@@ -5,21 +5,16 @@ import Json.Decode as Decode exposing (Value, Decoder)
 import Task exposing (Task)
 import Effects exposing (Never)
 import Debug
-import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), ErrorType(..))
+import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority)
 import TaskUtil
 import Component exposing (Update)
+import ElmFireSync.Handler exposing (Handler)
 
 type alias Ref a =
   {
-    location: Location,
+    url: String,
     handler: Handler a,
     state: Result NoSubscription (State a)
-  }
-
-type alias Handler a =
-  {
-    decoder: Decoder a,
-    encode: a -> Value
   }
 
 type NoSubscription =
@@ -47,20 +42,21 @@ type Action a =
   ValueChanged Snapshot |
   Unsubscribe
 
-init : Address (Action a) -> Handler a -> Location -> Update (Ref a) (Action a)
-init address handler location =
+init : Address (Action a) -> Handler a -> String -> Update (Ref a) (Action a)
+init address handler url =
   {
     model =
       {
-        location =
-          location,
+        url =
+          url,
         handler =
           handler,
         state =
           Err NotSubscribed
       },
     effects =
-      location
+      url
+      |> ElmFire.fromUrl
       |> ElmFire.subscribe
         (\snapshot ->
           snapshot |> ValueChanged |> Signal.send address
@@ -138,7 +134,8 @@ update action model =
           model.state |> Result.toMaybe
           |> Maybe.map (\state ->
             state.subscription |> ElmFire.unsubscribe
-            |> TaskUtil.toEffects None "ElmFire.unsubscribe failed"
+            |> TaskUtil.swallowError None "ElmFire.unsubscribe failed"
+            |> Effects.task
           )
           |> Maybe.withDefault Effects.none
       }
@@ -150,16 +147,20 @@ get model =
     state.data |> Result.formatError NoData
   )
 
-set : a -> Ref a -> Task ElmFire.Error (Ref a)
-set value model =
+set : Maybe Priority -> a -> Ref a -> Task ElmFire.Error Reference
+set maybePriority value model =
   let result =
-        ElmFire.set json model.location
-        |> Task.map (always model)
+        maybePriority
+        |> Maybe.map (\priority ->
+          ElmFire.setWithPriority json priority location
+        )
+        |> Maybe.withDefault (ElmFire.set json location)
       json =
         value |> model.handler.encode
+      location =
+        model.url |> ElmFire.fromUrl
   in result
 
-delete : Ref a -> Task ElmFire.Error (Ref a)
+delete : Ref a -> Task ElmFire.Error Reference
 delete model =
-  ElmFire.remove model.location
-  |> Task.map (always model)
+  ElmFire.remove (model.url |> ElmFire.fromUrl)
