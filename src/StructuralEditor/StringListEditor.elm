@@ -23,9 +23,9 @@ import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.RefList as RefList exposing (RefList)
 import StructuralEditor.StringEditor as StringEditor
 
--- TODO implement priority fixing
+-- TODO fix focus behavior when adding item, backspacing item, deleting last item
 -- TODO implement move
--- TODO fix focus behavior
+-- TODO implement priority fixing
 
 type alias Model =
   {
@@ -227,6 +227,7 @@ viewEditor address model item =
         model.editors |> Dict.get url |> Maybe.map (\editor ->
           editor
           |> StringEditor.view
+            []
             initialInputText
             (address |> forwardToEditor (Existing url))
           |> wrapEditorHtml (Just item.ref) editor
@@ -299,6 +300,7 @@ viewAdder : Address Action -> Model -> Html
 viewAdder address model =
   model.adder
   |> StringEditor.view
+    [Attributes.attribute "data-autofocus" ""]
     ""
     (address |> forwardToEditor Adder)
   |> wrapEditorHtml Nothing model.adder

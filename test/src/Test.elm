@@ -30,8 +30,8 @@ app =
         StringListEditor.init actionMailbox.address url,
       update =
         StringListEditor.update actionMailbox.address,
-      view =
-        StringListEditor.view StringListEditor.lineSeparator,
+      view address model =
+        StringListEditor.view StringListEditor.lineSeparator address model |> handleAutofocus,
       inputs =
         inputs
     }
@@ -47,3 +47,35 @@ url =
 inputs : List (Signal Action)
 inputs =
   [actionMailbox.signal]
+
+handleAutofocus : Html -> Html
+handleAutofocus html =
+  Html.div
+    []
+    [
+      Html.node "script" [] [Html.text script],
+      html
+    ]
+
+script = """
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    handleAutofocus(mutation.addedNodes);
+  });
+});
+var target = document.querySelector('body > div');
+var config = { childList: true, subtree: true };
+observer.observe(target, config);
+
+function handleAutofocus(nodeList) {
+  for (var i = 0; i < nodeList.length; i++) {
+    var node = nodeList[i];
+    if (node instanceof Element && node.hasAttribute('data-autofocus')) {
+      node.focus();
+      break;
+    } else {
+      handleAutofocus(node.childNodes);
+    }
+  }
+}
+"""

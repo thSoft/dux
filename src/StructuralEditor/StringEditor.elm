@@ -4,7 +4,7 @@ import Keyboard exposing (KeyCode)
 import Json.Decode as Decode exposing (Decoder)
 import String
 import Signal exposing (Address)
-import Html exposing (Html)
+import Html exposing (Html, Attribute)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Task exposing (Task)
@@ -47,19 +47,21 @@ update onSave action model =
           onSave model |> Effects.task
       }
 
-view : String -> Address Action -> Model -> Html
-view initialInputText address model =
+view : List Attribute -> String -> Address Action -> Model -> Html
+view extraAttributes initialInputText address model =
   let result =
         Html.span
-          [
-            Attributes.contenteditable True,
-            handleKeys False [enter.keyCode],
-            Events.on "input" inputTextDecoder handleInput,
-            Events.onKeyUp address keyUpAction
-          ]
+          (attributes ++ extraAttributes)
           [
             initialInputText |> Html.text
           ]
+      attributes =
+        [
+          Attributes.contenteditable True,
+          handleKeys False [enter.keyCode],
+          Events.on "input" inputTextDecoder handleInput,
+          Events.onKeyUp address keyUpAction
+        ]
       handleInput inputText =
         inputText |> SetInputText |> Signal.message address
       keyUpAction key =
