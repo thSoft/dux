@@ -21,17 +21,18 @@ import TaskUtil
 import ElmFireSync.Handler as Handler
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.RefList as RefList exposing (RefList)
-import StructuralEditor.StringEditor as StringEditor
+import StructuralEditor.Combobox as Combobox
 
--- TODO fix focus behavior when adding item, backspacing item, deleting last item
+-- TODO fix lost focus when deleting last item or before cursor
+-- TODO move to next/previous element when pressing enter or right/left
 -- TODO implement move
 -- TODO implement priority fixing
 
 type alias Model =
   {
     refList: RefList String,
-    editors: Dict String StringEditor.Model,
-    adder: StringEditor.Model,
+    editors: Dict String Combobox.Model,
+    adder: Combobox.Model,
     adderPosition: Maybe Position
   }
 
@@ -44,7 +45,7 @@ type Action =
   Delete (RefList.Item String) |
   SetAdderPosition (Maybe Position) |
   RefListAction (RefList.Action String) |
-  EditorAction EditorId StringEditor.Action
+  EditorAction EditorId Combobox.Action
 
 type EditorId =
   Existing String |
@@ -61,7 +62,7 @@ init address url =
               editors =
                 Dict.empty,
               adder =
-                StringEditor.init "",
+                Combobox.init "",
               adderPosition =
                 Nothing
             },
@@ -87,8 +88,17 @@ update address action model =
           |> Effects.task
       }
     SetAdderPosition adderPosition ->
-      Component.return
-        { model | adderPosition <- adderPosition }
+      let result =
+            Component.return
+              { model |
+                adderPosition <-
+                  adderPosition,
+                adder <-
+                  { oldAdder | inputText <- "" }
+              }
+          oldAdder =
+            model.adder
+      in result
     RefListAction refListAction ->
       let updateResult =
             {
@@ -111,7 +121,7 @@ update address action model =
                       |> Decode.decodeValue (Handler.stringHandler |> .decoder)
                       |> Result.toMaybe
                       |> Maybe.withDefault ""
-                      |> StringEditor.init
+                      |> Combobox.init
                 in result
               RefList.ChildRemoved snapshot ->
                 model.editors |> Dict.remove (snapshot.reference |> ElmFire.toUrl)
@@ -133,10 +143,7 @@ update address action model =
                   updatedEditors =
                     model.editors |> Dict.insert url editorUpdate.model
                   editorUpdate =
-                    editor |> StringEditor.update onSave editorAction
-                  onSave editorModel =
-                      item.ref |> Ref.set (Just item.priority) editorModel.inputText
-                    |> TaskUtil.swallowError StringEditor.None "ElmFire.setWithPriority failed"
+                    editor |> Combobox.update (editorContext model item editor) editorAction
               in result
             )
           ) |> Maybe.withDefault (Component.return model)
@@ -148,22 +155,17 @@ update address action model =
                       adder <-
                         adderUpdate.model,
                       adderPosition <-
-                        if editorAction == StringEditor.Save then Nothing else model.adderPosition
+                        case editorAction of
+                          Combobox.Submit _ ->
+                            Nothing
+                          _ ->
+                            model.adderPosition
                     },
                   effects =
                     adderUpdate.effects |> Effects.map (EditorAction Adder)
                 }
               adderUpdate =
-                model.adder |> StringEditor.update onSave editorAction
-              onSave editorModel =
-                model.refList.url
-                |> ElmFire.fromUrl
-                |> ElmFire.push
-                |> ElmFire.open
-                |> TaskUtil.andThen (\reference ->
-                  reference |> adderRef |> Ref.set (Just <| adderPriority model) editorModel.inputText
-                )
-                |> TaskUtil.swallowError StringEditor.None "ElmFire.setWithPriority failed"
+                model.adder |> Combobox.update (adderContext model) editorAction
           in result
 
 type alias Separator =
@@ -226,23 +228,45 @@ viewEditor address model item =
   let result =
         model.editors |> Dict.get url |> Maybe.map (\editor ->
           editor
-          |> StringEditor.view
-            []
-            initialInputText
+          |> Combobox.view
+            (editorContext model item editor)
             (address |> forwardToEditor (Existing url))
           |> wrapEditorHtml (Just item.ref) editor
         ) |> Maybe.withDefault ("Programming error, no editor for " ++ url |> Html.text)
-      initialInputText =
-        case item.ref |> Ref.get of
-          Err error ->
-            error |> toString
-          Ok string ->
-            string
       url =
         item.ref.url
   in result
 
-wrapEditorHtml : Maybe (Ref String) -> StringEditor.Model -> Html -> Html
+editorContext : Model -> RefList.Item String -> Combobox.Model -> Combobox.Context
+editorContext model item editor =
+  let result =
+        {
+          initialInputText =
+            initialInputText,
+          commands =
+            if (item.ref |> Ref.get) /= Ok editor.inputText then [set] else [],
+          style =
+            Combobox.ContentEditable,
+          extraAttributes =
+            []
+        }
+      set =
+        {
+          label =
+            "Set value to “" ++ editor.inputText ++ "”",
+          task =
+            item.ref |> Ref.set (Just item.priority) editor.inputText
+            |> TaskUtil.swallowError () "ElmFire.setWithPriority failed"
+        }
+      initialInputText =
+        case item.ref |> Ref.get of
+          Err error ->
+            error |> toString -- TODO make error presentation more user-friendly
+          Ok string ->
+            string
+  in result
+
+wrapEditorHtml : Maybe (Ref String) -> Combobox.Model -> Html -> Html
 wrapEditorHtml maybeRef editor editorHtml =
   let result =
         Html.div
@@ -269,7 +293,7 @@ viewTransformer after separator address model item =
         Html.span
           [
             Attributes.contenteditable True,
-            StringEditor.handleKeys True [removerKey.keyCode, tab.keyCode],
+            Combobox.handleKeys True [removerKey.keyCode, tab.keyCode],
             Events.onKeyUp address keyUpAction
           ]
           maybeSeparator
@@ -299,11 +323,39 @@ viewTransformer after separator address model item =
 viewAdder : Address Action -> Model -> Html
 viewAdder address model =
   model.adder
-  |> StringEditor.view
-    [Attributes.attribute "data-autofocus" ""]
-    ""
+  |> Combobox.view
+    (adderContext model)
     (address |> forwardToEditor Adder)
   |> wrapEditorHtml Nothing model.adder
+
+adderContext : Model -> Combobox.Context
+adderContext model =
+  let result =
+        {
+          initialInputText =
+            "",
+          commands =
+            [add],
+          style =
+            Combobox.ContentEditable,
+          extraAttributes =
+            [Attributes.attribute "data-autofocus" ""]
+        }
+      add =
+        {
+          label =
+            "Add “" ++ model.adder.inputText ++ "”",
+          task =
+            model.refList.url
+            |> ElmFire.fromUrl
+            |> ElmFire.push
+            |> ElmFire.open
+            |> TaskUtil.andThen (\reference ->
+              reference |> adderRef |> Ref.set (Just <| adderPriority model) model.adder.inputText
+            )
+            |> TaskUtil.swallowError () "ElmFire.setWithPriority failed"
+        }
+  in result
 
 adderRef : Reference -> Ref String
 adderRef reference =
@@ -355,6 +407,6 @@ forwardToRefList : Address Action -> Address (RefList.Action String)
 forwardToRefList address =
   Signal.forwardTo address RefListAction
 
-forwardToEditor : EditorId -> Address Action -> Address StringEditor.Action
+forwardToEditor : EditorId -> Address Action -> Address Combobox.Action
 forwardToEditor id address =
   Signal.forwardTo address (EditorAction id)
