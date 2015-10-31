@@ -6,7 +6,8 @@ import Html exposing (Html)
 import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
-import StructuralEditor.StringListEditor as StringListEditor
+import ElmFireSync.Handler as Handler
+import StructuralEditor.ListEditor as ListEditor
 
 main : Signal Html
 main =
@@ -16,29 +17,43 @@ port tasks : Signal (Task Never ())
 port tasks =
   app.tasks
 
+type alias Element =
+  String
+
 type alias Model =
-  StringListEditor.Model
+  ListEditor.Model Element
 
 type alias Action =
-  StringListEditor.Action
+  ListEditor.Action Element
 
 app : App Model
 app =
   Component.run
     {
       init =
-        StringListEditor.init actionMailbox.address url,
+        ListEditor.init context actionMailbox.address url,
       update =
-        StringListEditor.update actionMailbox.address,
+        ListEditor.update context actionMailbox.address,
       view address model =
-        StringListEditor.view StringListEditor.lineSeparator address model |> handleAutofocus,
+        ListEditor.view context ListEditor.lineSeparator address model |> handleAutofocus,
       inputs =
         inputs
     }
 
+context : ListEditor.Context Element
+context =
+  {
+    toString =
+      identity,
+    fromString value =
+      Just value,
+    itemHandler =
+      Handler.stringHandler
+  }
+
 actionMailbox : Mailbox Action
 actionMailbox =
-  Signal.mailbox StringListEditor.None
+  Signal.mailbox ListEditor.None
 
 url : String
 url =
