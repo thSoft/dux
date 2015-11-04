@@ -4,16 +4,10 @@ require('shelljs/global');
 var paths = require('./paths.js');
 
 build();
-buildTest();
 
 function build() {
-  rm('-rf', paths.targetDirectory);
-  make(paths.root, paths.source, paths.target);
-}
-
-function buildTest() {
-  rm('-rf', paths.testTargetDirectory);
-  make(paths.testDirectory, paths.testSource, paths.testTarget);
+  rm('-rf', paths.targetMainDirectory);
+  make(paths.mainDirectory, paths.mainFile, paths.targetFile);
 }
 
 function make(directory, source, target) {

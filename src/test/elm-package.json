@@ -4,10 +4,12 @@
     "repository": "https://github.com/thSoft/DUX.git",
     "license": "BSD3",
     "source-directories": [
-        "src",
-        "../src"
+        "elm",
+        "../main/elm"
     ],
-    "exposed-modules": [],
+    "exposed-modules": [
+      "Test"
+    ],
     "dependencies": {
         "TheSeamau5/elm-task-extra": "2.0.0 <= v < 3.0.0",
         "ThomasWeiser/elmfire": "1.0.1 <= v < 2.0.0",

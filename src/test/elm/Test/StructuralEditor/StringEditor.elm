@@ -1,4 +1,4 @@
-module StructuralEditor.Test.StringEditor where
+module Test.StructuralEditor.StringEditor where
 
 import Signal exposing (Mailbox)
 import Task exposing (Task)

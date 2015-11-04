@@ -7,5 +7,5 @@ var paths = require('./paths.js');
 
 cd(paths.testDirectory);
 exec('elm-reactor', { async: true });
-open(path.join('http://localhost:8000', path.join(paths.testSourceSubdirectory, paths.testFilename)));
+open(path.join('http://localhost:8000', path.join(paths.testElmDirectoryRelative, paths.testRootModule)));
 open(paths.elmPackage);
