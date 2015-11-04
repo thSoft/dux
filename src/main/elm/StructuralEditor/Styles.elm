@@ -1,14 +1,13 @@
-module StructuralEditor.Util where
+module StructuralEditor.Styles where
 
 import Html
 import Html.Attributes as Attributes
 
-bordered : String -> Html.Attribute
+bordered : String -> List (String, String)
 bordered borderColor =
-  Attributes.style [
+  [
     ("display", "inline"),
     ("border", "1px solid " ++ borderColor),
     ("border-radius", "4px"),
-    ("padding", "2px"),
-    ("margin", "1px")
+    ("padding", "0.2em")
   ]

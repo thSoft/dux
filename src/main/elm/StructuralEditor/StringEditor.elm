@@ -15,7 +15,7 @@ import TaskUtil
 import ElmFireSync.Codec as Codec
 import ElmFireSync.Ref as Ref exposing (Ref)
 import StructuralEditor.Combobox as Combobox
-import StructuralEditor.Util as Util
+import StructuralEditor.Styles as Styles
 
 type alias Model =
   {
@@ -134,7 +134,7 @@ view address model =
   let result =
         Html.div
           [
-            Util.bordered borderColor
+            Attributes.style <| Styles.bordered borderColor
           ]
           [viewCombobox]
       borderColor =

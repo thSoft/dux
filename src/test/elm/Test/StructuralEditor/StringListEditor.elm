@@ -3,6 +3,7 @@ module Test.StructuralEditor.StringListEditor where
 import Signal exposing (Mailbox)
 import Task exposing (Task)
 import Html exposing (Html)
+import Html.Attributes as Attributes
 import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
@@ -32,7 +33,7 @@ app =
       update =
         StringListEditor.update actionMailbox.address,
       view address model =
-        StringListEditor.view address model |> handleAutofocus,
+        StringListEditor.view address model |> wrap,
       inputs =
         inputs
     }
@@ -54,14 +55,31 @@ inputs : List (Signal Action)
 inputs =
   [actionMailbox.signal]
 
-handleAutofocus : Html -> Html
-handleAutofocus html =
+wrap : Html -> Html
+wrap html =
   Html.div
-    []
     [
-      Html.node "script" [] [Html.text script],
+      Attributes.style [
+        ("font-family", fontFamily ++ ", Monaco, Consolas, 'Courier New', Courier")
+      ]
+    ]
+    [
+      Html.node "link"
+        [
+          Attributes.rel "stylesheet",
+          Attributes.type' "text/css",
+          Attributes.href ("http://fonts.googleapis.com/css?family=" ++ fontFamily)
+        ]
+        [],
+      Html.node "script"
+        []
+        [Html.text script],
       html
     ]
+
+fontFamily : String
+fontFamily =
+  "Inconsolata"
 
 script = """
 var observer = new MutationObserver(function(mutations) {

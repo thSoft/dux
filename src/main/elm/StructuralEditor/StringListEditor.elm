@@ -24,7 +24,7 @@ import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.ListRef as ListRef exposing (ListRef)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.StringEditor as StringEditor
-import StructuralEditor.Util as Util
+import StructuralEditor.Styles as Styles
 
 -- TODO fix lost focus when deleting last item or before cursor
 -- TODO move to next/previous element when pressing enter or right/left
@@ -67,7 +67,10 @@ lineSeparator =
       Html.br
         [
           Attributes.style [
-            ("line-height", "1.4")
+            ("content", " "),
+            ("display", "block"),
+            ("margin", "0.25em"),
+            ("line-height", "1.6")
           ]
         ]
         [],
@@ -193,7 +196,11 @@ view : Address Action -> Model -> Html
 view address model =
   let result =
         Html.div
-          []
+          [
+            Attributes.style [
+              ("padding", "0.36em")
+            ]
+          ]
           itemViews
       itemViews =
         if items |> List.isEmpty then
@@ -234,6 +241,9 @@ viewTransformer after address model url item =
         Html.span
           [
             Attributes.contenteditable True,
+            Attributes.style [
+              ("padding", transformerSize)
+            ],
             Combobox.handleKeys True [removerKey.keyCode, tab.keyCode],
             Events.onKeyUp address keyUpAction
           ]
@@ -259,11 +269,17 @@ viewTransformer after address model url item =
         else []
   in result
 
+transformerSize : String
+transformerSize =
+  "0.1em"
+
 viewInserter : Address Action -> Model -> Html
 viewInserter address model =
   Html.div -- wrapping instead of specifying extraAttributes because of https://github.com/Matt-Esch/virtual-dom/issues/176
     [
-      Util.bordered "lightgray"
+      Attributes.style <|
+        ("margin-left", transformerSize) ::
+        Styles.bordered "lightgray"
     ]
     [
       model.inserter
