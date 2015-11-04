@@ -1,4 +1,4 @@
-module Test where
+module StructuralEditor.Test.StringListEditor where
 
 import Signal exposing (Mailbox)
 import Task exposing (Task)
@@ -6,8 +6,8 @@ import Html exposing (Html)
 import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
-import ElmFireSync.Handler as Handler
-import StructuralEditor.ListEditor as ListEditor
+import ElmFireSync.Codec as Codec
+import StructuralEditor.StringListEditor as StringListEditor
 
 main : Signal Html
 main =
@@ -17,47 +17,38 @@ port tasks : Signal (Task Never ())
 port tasks =
   app.tasks
 
-type alias Element =
-  String
-
 type alias Model =
-  ListEditor.Model Element
+  StringListEditor.Model
 
 type alias Action =
-  ListEditor.Action Element
+  StringListEditor.Action
 
 app : App Model
 app =
   Component.run
     {
       init =
-        ListEditor.init context actionMailbox.address url,
+        StringListEditor.init context actionMailbox.address,
       update =
-        ListEditor.update context actionMailbox.address,
+        StringListEditor.update actionMailbox.address,
       view address model =
-        ListEditor.view context ListEditor.lineSeparator address model |> handleAutofocus,
+        StringListEditor.view address model |> handleAutofocus,
       inputs =
         inputs
     }
 
-context : ListEditor.Context Element
+context : StringListEditor.Context
 context =
   {
-    toString =
-      identity,
-    fromString value =
-      Just value,
-    itemHandler =
-      Handler.stringHandler
+    url =
+      "https://thsoft.firebaseio.com/DUX/test/StringListEditor",
+    separator =
+      StringListEditor.lineSeparator
   }
 
 actionMailbox : Mailbox Action
 actionMailbox =
-  Signal.mailbox ListEditor.None
-
-url : String
-url =
-  "https://thsoft.firebaseio.com/DUX/test"
+  Signal.mailbox StringListEditor.None
 
 inputs : List (Signal Action)
 inputs =

@@ -1,16 +1,16 @@
-module ElmFireSync.Handler where
+module ElmFireSync.Codec where
 
 import Json.Decode as Decode exposing (Value, Decoder)
 import Json.Encode as Encode
 
-type alias Handler a =
+type alias Codec a =
   {
     decoder: Decoder a,
     encode: a -> Value
   }
 
-stringHandler : Handler String
-stringHandler =
+string : Codec String
+string =
   {
     decoder =
       Decode.string,

@@ -5,16 +5,21 @@ import Json.Decode as Decode exposing (Value, Decoder)
 import Task exposing (Task)
 import Effects exposing (Never)
 import Debug
-import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority)
+import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
 import TaskUtil
 import Component exposing (Update)
-import ElmFireSync.Handler exposing (Handler)
+import ElmFireSync.Codec exposing (Codec)
 
 type alias Ref a =
   {
-    url: String,
-    handler: Handler a,
+    context: Context a,
     state: Result NoSubscription (State a)
+  }
+
+type alias Context a =
+  {
+    url: String,
+    codec: Codec a
   }
 
 type NoSubscription =
@@ -24,6 +29,7 @@ type NoSubscription =
 type alias State a =
   {
     subscription: Subscription,
+    priority: Priority,
     data: Result NoData a
   }
 
@@ -31,31 +37,24 @@ type NoData =
   Loading |
   DecodingFailed String
 
-type Error =
-  NoSubscription NoSubscription |
-  NoData NoData
-
 type Action a =
   None |
   SubscriptionError ElmFire.Error |
   Subscribed Subscription |
-  ValueChanged Snapshot |
-  Unsubscribe
+  ValueChanged Snapshot
 
-init : Address (Action a) -> Handler a -> String -> Update (Ref a) (Action a)
-init address handler url =
+init : Context a -> Address (Action a) -> Update (Ref a) (Action a)
+init context address =
   {
     model =
       {
-        url =
-          url,
-        handler =
-          handler,
+        context =
+          context,
         state =
           Err NotSubscribed
       },
     effects =
-      url
+      context.url
       |> ElmFire.fromUrl
       |> ElmFire.subscribe
         (\snapshot ->
@@ -89,7 +88,7 @@ init address handler url =
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : (Action a) -> (Ref a) -> Update (Ref a) (Action a)
+update : Action a -> Ref a -> Update (Ref a) (Action a)
 update action model =
   case action of
     None ->
@@ -101,13 +100,16 @@ update action model =
       let result =
             Component.return updatedModel
           updatedModel =
-            model.state |> Result.toMaybe
+            model.state
+            |> Result.toMaybe
             |> Maybe.map (always model) -- we are already subscribed
             |> Maybe.withDefault { model | state <- Ok updatedState } -- not yet
           updatedState =
             {
               subscription =
                 subscription,
+              priority =
+                NoPriority,
               data =
                 Err Loading
             }
@@ -120,25 +122,18 @@ update action model =
             {
               subscription =
                 snapshot.subscription,
+              priority =
+                snapshot.priority,
               data =
                 snapshot.value
-                |> Decode.decodeValue model.handler.decoder
+                |> Decode.decodeValue model.context.codec.decoder
                 |> Result.formatError DecodingFailed
             }
       in result
-    Unsubscribe ->
-      {
-        model =
-          { model | state <- Err NotSubscribed },
-        effects =
-          model.state |> Result.toMaybe
-          |> Maybe.map (\state ->
-            state.subscription |> ElmFire.unsubscribe
-            |> TaskUtil.swallowError None "ElmFire.unsubscribe failed"
-            |> Effects.task
-          )
-          |> Maybe.withDefault Effects.none
-      }
+
+type Error =
+  NoSubscription NoSubscription |
+  NoData NoData
 
 get : Ref a -> Result Error a
 get model =
@@ -147,20 +142,36 @@ get model =
     state.data |> Result.formatError NoData
   )
 
-set : Maybe Priority -> a -> Ref a -> Task ElmFire.Error Reference
-set maybePriority value model =
+getPriority : Ref a -> Priority
+getPriority model =
+  model.state
+  |> Result.toMaybe
+  |> Maybe.map .priority
+  |> Maybe.withDefault NoPriority
+
+set : a -> Ref a -> Task ElmFire.Error Reference
+set value model =
   let result =
-        maybePriority
-        |> Maybe.map (\priority ->
-          ElmFire.setWithPriority json priority location
-        )
-        |> Maybe.withDefault (ElmFire.set json location)
+        ElmFire.setWithPriority json priority location
       json =
-        value |> model.handler.encode
+        value |> model.context.codec.encode
+      priority =
+        model |> getPriority
       location =
-        model.url |> ElmFire.fromUrl
+        model.context.url |> ElmFire.fromUrl
   in result
 
 delete : Ref a -> Task ElmFire.Error Reference
 delete model =
-  ElmFire.remove (model.url |> ElmFire.fromUrl)
+  model.context.url |> ElmFire.fromUrl |> ElmFire.remove
+
+{-- Do not call!
+-}
+unsubscribe : Ref a -> Task ElmFire.Error ()
+unsubscribe model =
+  model.state
+  |> Result.toMaybe
+  |> Maybe.map (\state ->
+    state.subscription |> ElmFire.unsubscribe
+  )
+  |> Maybe.withDefault (Task.succeed ())

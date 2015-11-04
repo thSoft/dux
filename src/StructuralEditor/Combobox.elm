@@ -17,8 +17,9 @@ import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 
 -- TODO cancel
-
--- Model
+-- TODO highlight input text in commands
+-- TODO command description
+-- TODO don't filter commands?
 
 type alias Model =
   {
@@ -29,7 +30,7 @@ type alias Model =
 
 type alias Context =
   {
-    initialInputText: String,
+    inputText: String,
     commands: List Command,
     style: Style,
     extraAttributes: List Html.Attribute
@@ -46,24 +47,22 @@ type Style =
   ContentEditable
 
 init : String -> Model
-init inputText =
+init initialInputText =
   {
     inputText =
-      inputText,
+      initialInputText,
     commandIndex =
       0,
     menuVisible =
       False
   }
 
--- Update
-
 type Action =
   None |
   SetInputText String |
   SetMenuVisible Bool |
   Submit Command |
-  MoveToNext |
+  MoveToNext | -- TODO extract orthogonal MoveTo
   MoveToPrevious |
   MoveToFirst |
   MoveToLast
@@ -118,8 +117,6 @@ moveBy delta context model =
       visibleItems =
         getVisibleCommands context model
   in result
-
--- View
 
 view : Context -> Address Action -> Model -> Html
 view context address model =
@@ -177,9 +174,9 @@ view context address model =
       textContent =
           case context.style of
             Input ->
-              [Attributes.value context.initialInputText]
+              [Attributes.value context.inputText]
             ContentEditable ->
-              [Attributes.property "textContent" (context.initialInputText |> Encode.string)]
+              [Attributes.property "textContent" (context.inputText |> Encode.string)]
       menu =
         if (not model.menuVisible) || (commands |> List.isEmpty) then
           []
