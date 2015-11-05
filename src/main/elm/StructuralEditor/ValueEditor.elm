@@ -15,20 +15,15 @@ import TaskUtil
 import ElmFireSync.Codec as Codec
 import ElmFireSync.Ref as Ref exposing (Ref)
 import StructuralEditor.Combobox as Combobox
+import StructuralEditor.EditorKind exposing (EditorKind)
 import StructuralEditor.Styles as Styles
 
 type alias Model a =
   {
-    context: Context a,
+    kind: EditorKind a,
+    url: String,
     ref: Ref a,
     combobox: Combobox.Model
-  }
-
-type alias Context a =
-  {
-    ref: Ref.Context a,
-    toString: a -> String,
-    fromString: String -> Maybe a
   }
 
 type Action a =
@@ -36,14 +31,16 @@ type Action a =
   RefAction (Ref.Action a) |
   ComboboxAction Combobox.Action
 
-init : Context a -> Address (Action a) -> Update (Model a) (Action a)
-init context address =
+init : EditorKind a -> String -> Address (Action a) -> Update (Model a) (Action a)
+init kind url address =
   let result =
         {
           model =
             {
-              context =
-                context,
+              url =
+                url,
+              kind =
+                kind,
               ref =
                 initRef.model,
               combobox =
@@ -54,7 +51,8 @@ init context address =
         }
       initRef =
         Ref.init
-          context.ref
+          kind.codec
+          url
           (address `Signal.forwardTo` RefAction)
       initCombobox =
         Combobox.init ""
@@ -67,7 +65,7 @@ comboboxContext model =
       model |> getInputText,
     commands =
       model.combobox.inputText
-      |> model.context.fromString
+      |> model.kind.stringConverter.fromString
       |> Maybe.map (\value ->
         if modified model then
           [
@@ -95,7 +93,7 @@ getInputText model =
   model.ref
   |> Ref.get
   |> Result.toMaybe
-  |> Maybe.map model.context.toString
+  |> Maybe.map model.kind.stringConverter.toString
   |> Maybe.withDefault ""
 
 modified : Model a -> Bool

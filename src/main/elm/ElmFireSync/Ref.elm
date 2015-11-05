@@ -12,14 +12,9 @@ import ElmFireSync.Codec exposing (Codec)
 
 type alias Ref a =
   {
-    context: Context a,
-    state: Result NoSubscription (State a)
-  }
-
-type alias Context a =
-  {
+    codec: Codec a,
     url: String,
-    codec: Codec a
+    state: Result NoSubscription (State a)
   }
 
 type NoSubscription =
@@ -43,18 +38,20 @@ type Action a =
   Subscribed Subscription |
   ValueChanged Snapshot
 
-init : Context a -> Address (Action a) -> Update (Ref a) (Action a)
-init context address =
+init : Codec a -> String -> Address (Action a) -> Update (Ref a) (Action a)
+init codec url address =
   {
     model =
       {
-        context =
-          context,
+        url =
+          url,
+        codec =
+          codec,
         state =
           Err NotSubscribed
       },
     effects =
-      context.url
+      url
       |> ElmFire.fromUrl
       |> ElmFire.subscribe
         (\snapshot ->
@@ -126,7 +123,7 @@ update action model =
                 snapshot.priority,
               data =
                 snapshot.value
-                |> Decode.decodeValue model.context.codec.decoder
+                |> Decode.decodeValue model.codec.decoder
                 |> Result.formatError DecodingFailed
             }
       in result
@@ -154,16 +151,16 @@ set value model =
   let result =
         ElmFire.setWithPriority json priority location
       json =
-        value |> model.context.codec.encode
+        value |> model.codec.encode
       priority =
         model |> getPriority
       location =
-        model.context.url |> ElmFire.fromUrl
+        model.url |> ElmFire.fromUrl
   in result
 
 delete : Ref a -> Task ElmFire.Error Reference
 delete model =
-  model.context.url |> ElmFire.fromUrl |> ElmFire.remove
+  model.url |> ElmFire.fromUrl |> ElmFire.remove
 
 {-- Do not call!
 -}

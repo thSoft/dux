@@ -8,7 +8,9 @@ import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
 import ElmFireSync.Codec as Codec
-import StructuralEditor.StringListEditor as StringListEditor
+import StructuralEditor.ListEditor as ListEditor
+import StructuralEditor.EditorKind as EditorKind
+import StructuralEditor.Separator as Separator
 
 main : Signal Html
 main =
@@ -18,38 +20,41 @@ port tasks : Signal (Task Never ())
 port tasks =
   app.tasks
 
+type alias Element =
+  String
+
 type alias Model =
-  StringListEditor.Model
+  ListEditor.Model Element
 
 type alias Action =
-  StringListEditor.Action
+  ListEditor.Action Element
 
 app : App Model
 app =
   Component.run
     {
       init =
-        StringListEditor.init context actionMailbox.address,
+        ListEditor.init EditorKind.string context actionMailbox.address,
       update =
-        StringListEditor.update actionMailbox.address,
+        ListEditor.update actionMailbox.address,
       view address model =
-        StringListEditor.view address model |> wrap,
+        ListEditor.view address model |> wrap,
       inputs =
         inputs
     }
 
-context : StringListEditor.Context
+context : ListEditor.Context
 context =
   {
     url =
       "https://thsoft.firebaseio.com/DUX/test/StringListEditor",
     separator =
-      StringListEditor.lineSeparator
+      Separator.line
   }
 
 actionMailbox : Mailbox Action
 actionMailbox =
-  Signal.mailbox StringListEditor.None
+  Signal.mailbox ListEditor.None
 
 inputs : List (Signal Action)
 inputs =

@@ -14,14 +14,9 @@ import ElmFireSync.Ref as Ref exposing (Ref)
 
 type alias ListRef model action =
   {
-    context: Context model action,
-    items: Dict String (Item model)
-  }
-
-type alias Context model action =
-  {
     url: String,
-    itemHandler: ItemHandler model action
+    itemHandler: ItemHandler model action,
+    items: Dict String (Item model)
   }
 
 type alias Item model =
@@ -37,14 +32,16 @@ type Action action =
   ChildMoved Snapshot |
   ItemAction String action
 
-init : Context model action -> Address (Action action) -> Update (ListRef model action) (Action action)
-init context address =
+init : ItemHandler model action -> String -> Address (Action action) -> Update (ListRef model action) (Action action)
+init itemHandler url address =
   let result =
         {
           model =
             {
-              context =
-                context,
+              itemHandler =
+                itemHandler,
+              url =
+                url,
               items =
                 Dict.empty
             },
@@ -66,7 +63,7 @@ init context address =
             |> Task.map (always ())
           )
           (query <| ElmFire.noOrder)
-          (context.url |> ElmFire.fromUrl)
+          (url |> ElmFire.fromUrl)
         |> TaskUtil.swallowError None "Subscription failed"
         |> Effects.task
   in result
@@ -94,7 +91,7 @@ update address action model =
                 itemUpdate.model
             }
           itemUpdate =
-            url |> model.context.itemHandler.init
+            url |> model.itemHandler.init
           itemAddress =
             address `Signal.forwardTo` (ItemAction url)
       in result
@@ -107,7 +104,7 @@ update address action model =
                     items <- model.items |> Dict.remove url },
                 effects =
                   item.data
-                  |> model.context.itemHandler.done
+                  |> model.itemHandler.done
                   |> Effects.task
                   |> Effects.map (ItemAction url)
               }
@@ -139,7 +136,7 @@ update address action model =
             updatedItem =
               Just { item | data <- itemUpdate.model }
             itemUpdate =
-              model.context.itemHandler.update itemAction item.data
+              model.itemHandler.update itemAction item.data
         in result
       ) |> Maybe.withDefault (Component.return model)
 

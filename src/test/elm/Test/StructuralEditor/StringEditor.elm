@@ -7,7 +7,7 @@ import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
 import ElmFireSync.Codec as Codec
-import StructuralEditor.EditorContext as EditorContext
+import StructuralEditor.EditorKind as EditorKind
 import StructuralEditor.ValueEditor as ValueEditor
 
 main : Signal Html
@@ -32,7 +32,7 @@ app =
   Component.run
     {
       init =
-        ValueEditor.init (EditorContext.string url) actionMailbox.address,
+        ValueEditor.init EditorKind.string url actionMailbox.address,
       update =
         ValueEditor.update,
       view =
@@ -43,7 +43,7 @@ app =
 
 url : String
 url =
-  "https://thsoft.firebaseio.com/DUX/test/ValueEditor"
+  "https://thsoft.firebaseio.com/DUX/test/StringEditor"
 
 actionMailbox : Mailbox Action
 actionMailbox =

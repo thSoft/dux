@@ -1,4 +1,4 @@
-module StructuralEditor.StringListEditor where
+module StructuralEditor.ListEditor where
 
 import Debug
 import Array
@@ -23,8 +23,9 @@ import ElmFireSync.ItemHandler exposing (ItemHandler)
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.ListRef as ListRef exposing (ListRef)
 import StructuralEditor.Combobox as Combobox
-import StructuralEditor.EditorContext as EditorContext
+import StructuralEditor.EditorKind exposing (EditorKind)
 import StructuralEditor.ValueEditor as ValueEditor
+import StructuralEditor.Separator as Separator exposing (Separator)
 import StructuralEditor.Styles as Styles
 
 -- TODO fix lost focus when deleting last item or before cursor
@@ -32,16 +33,14 @@ import StructuralEditor.Styles as Styles
 -- TODO implement move
 -- TODO implement priority fixing
 
-type alias Model =
+type alias Model a =
   {
+    itemKind: EditorKind a,
     context: Context,
-    listRef: ListRef (ValueEditor.Model Element) (ValueEditor.Action Element),
+    listRef: ListRef (ValueEditor.Model a) (ValueEditor.Action a),
     inserter: Combobox.Model,
     inserterPosition: Maybe Position
   }
-
-type alias Element =
-  String
 
 type alias Context =
   {
@@ -49,86 +48,48 @@ type alias Context =
     separator: Separator
   }
 
-type alias Separator =
-  {
-    html: Html,
-    keyCode: KeyCode
-  }
-
-commaSeparator : Separator
-commaSeparator =
-  {
-    html =
-      "," |> Html.text,
-    keyCode =
-      188
-  }
-
-lineSeparator : Separator
-lineSeparator =
-  {
-    html =
-      Html.br
-        [
-          Attributes.style [
-            ("content", " "),
-            ("display", "block"),
-            ("margin", "0.25em"),
-            ("line-height", "1.6")
-          ]
-        ]
-        [],
-    keyCode =
-      13
-  }
-
 type Position =
   Before String |
   After String
 
-type Action =
+type Action a =
   None |
-  Delete (ListRef.Item (ValueEditor.Model Element)) |
-  ListRefAction (ListRef.Action (ValueEditor.Action Element)) |
+  Delete (ListRef.Item (ValueEditor.Model a)) |
+  ListRefAction (ListRef.Action (ValueEditor.Action a)) |
   InserterAction Combobox.Action |
   SetInserterPosition (Maybe Position)
 
-init : Context -> Address Action -> Update Model Action
-init context address =
+init : EditorKind a -> Context -> Address (Action a) -> Update (Model a) (Action a)
+init itemKind context address =
   let result =
         {
           model =
             {
+              itemKind =
+                itemKind,
               context =
                 context,
               listRef =
-                listRef.model,
+                initListRef.model,
               inserter =
                 Combobox.init "",
               inserterPosition =
                 Nothing
             },
           effects =
-            listRef.effects |> Effects.map ListRefAction
+            initListRef.effects |> Effects.map ListRefAction
         }
-      listRef =
-        ListRef.init listRefContext listRefAddress
-      listRefContext =
-        {
-          url =
-            context.url,
-          itemHandler =
-            editorItemHandler listRefAddress
-        }
+      initListRef =
+        ListRef.init (editorItemHandler listRefAddress itemKind) context.url listRefAddress
       listRefAddress =
         address `Signal.forwardTo` ListRefAction
   in result
 
-editorItemHandler : Address (ListRef.Action (ValueEditor.Action Element)) -> ItemHandler (ValueEditor.Model Element) (ValueEditor.Action Element)
-editorItemHandler address =
+editorItemHandler : Address (ListRef.Action (ValueEditor.Action a)) -> EditorKind a -> ItemHandler (ValueEditor.Model a) (ValueEditor.Action a)
+editorItemHandler address itemKind =
   {
     init url =
-      ValueEditor.init (EditorContext.string url) (address `Signal.forwardTo` (ListRef.ItemAction url)),
+      ValueEditor.init itemKind url (address `Signal.forwardTo` (ListRef.ItemAction url)),
     done model =
       model.ref
       |> Ref.unsubscribe
@@ -137,7 +98,7 @@ editorItemHandler address =
       ValueEditor.update
   }
 
-update : Address Action -> Action -> Model -> Update Model Action
+update : Address (Action a) -> Action a -> Model a -> Update (Model a) (Action a)
 update address action model =
   case action of
     None ->
@@ -196,7 +157,7 @@ update address action model =
             model.inserter |> Combobox.update (inserterContext model) inserterAction
       in result
 
-view : Address Action -> Model -> Html
+view : Address (Action a) -> Model a -> Html
 view address model =
   let result =
         Html.div
@@ -231,7 +192,7 @@ view address model =
           []
   in result
 
-viewEditor : Address Action -> Model -> String -> ListRef.Item (ValueEditor.Model Element) -> Html
+viewEditor : Address (Action a) -> Model a -> String -> ListRef.Item (ValueEditor.Model a) -> Html
 viewEditor address model url item =
   ValueEditor.view
     (address `Signal.forwardTo` (\itemAction ->
@@ -239,7 +200,7 @@ viewEditor address model url item =
     )
     item.data
 
-viewTransformer : Bool -> Address Action -> Model -> String -> ListRef.Item (ValueEditor.Model Element) -> Html
+viewTransformer : Bool -> Address (Action a) -> Model a -> String -> ListRef.Item (ValueEditor.Model a) -> Html
 viewTransformer after address model url item =
   let result =
         Html.span
@@ -277,7 +238,7 @@ transformerSize : String
 transformerSize =
   "0.1em"
 
-viewInserter : Address Action -> Model -> Html
+viewInserter : Address (Action a) -> Model a -> Html
 viewInserter address model =
   Html.div -- wrapping instead of specifying extraAttributes because of https://github.com/Matt-Esch/virtual-dom/issues/176
     [
@@ -292,49 +253,50 @@ viewInserter address model =
         (address `Signal.forwardTo` InserterAction)
     ]
 
-inserterContext : Model -> Combobox.Context
+inserterContext : Model a -> Combobox.Context
 inserterContext model =
   let result =
         {
           inputText =
             "",
           commands =
-            insert,
+            commands,
           style =
             Combobox.ContentEditable,
           extraAttributes =
             [Attributes.attribute "data-autofocus" ""]
         }
-      insert =
-        [
-          {
-            label =
-              "Insert “" ++ model.inserter.inputText ++ "”",
-            task =
-              model.listRef.context.url
-              |> ElmFire.fromUrl
-              |> ElmFire.push
-              |> ElmFire.open
-              |> TaskUtil.andThen (\reference ->
-                reference |> inserterRef |> Ref.set model.inserter.inputText
-              )
-              |> TaskUtil.andThen (\reference ->
-                reference |> ElmFire.location |> ElmFire.setPriority (inserterPriority model)
-              )
-              |> TaskUtil.swallowError () "Failed to insert item"
-          }
-        ]
+      commands =
+        model.inserter.inputText
+        |> model.itemKind.stringConverter.fromString
+        |> Maybe.map (\value ->
+          [
+            {
+              label =
+                "Insert " ++ (value |> toString),
+              task =
+                model.listRef.url
+                |> ElmFire.fromUrl
+                |> ElmFire.push
+                |> ElmFire.open
+                |> TaskUtil.andThen (\reference ->
+                  reference |> inserterRef model |> Ref.set value
+                )
+                |> TaskUtil.andThen (\reference ->
+                  reference |> ElmFire.location |> ElmFire.setPriority (inserterPriority model)
+                )
+                |> TaskUtil.swallowError () "Failed to insert item"
+            }
+          ]
+        )
+        |> Maybe.withDefault []
   in result
 
-inserterRef : Reference -> Ref String
-inserterRef reference =
+inserterRef : Model a -> Reference -> Ref a
+inserterRef model reference =
   Ref.init
-    {
-      url =
-        reference |> ElmFire.toUrl,
-      codec =
-        Codec.string
-    }
+    model.itemKind.codec
+    (reference |> ElmFire.toUrl)
     inserterRefActionMailbox.address -- dummy
   |> .model
 
@@ -342,7 +304,7 @@ inserterRefActionMailbox : Mailbox (Ref.Action a)
 inserterRefActionMailbox =
   Signal.mailbox Ref.None
 
-inserterPriority : Model -> Priority
+inserterPriority : Model a -> Priority
 inserterPriority model =
   model.inserterPosition |> Maybe.map (\inserterPosition ->
     let result =
