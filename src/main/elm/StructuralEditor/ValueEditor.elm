@@ -1,4 +1,4 @@
-module StructuralEditor.StringEditor where
+module StructuralEditor.ValueEditor where
 
 import Keyboard exposing (KeyCode)
 import Json.Decode as Decode exposing (Decoder)
@@ -17,23 +17,33 @@ import ElmFireSync.Ref as Ref exposing (Ref)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.Styles as Styles
 
-type alias Model =
+type alias Model a =
   {
-    ref: Ref String,
+    context: Context a,
+    ref: Ref a,
     combobox: Combobox.Model
   }
 
-type Action =
+type alias Context a =
+  {
+    ref: Ref.Context a,
+    toString: a -> String,
+    fromString: String -> Maybe a
+  }
+
+type Action a =
   None |
-  RefAction (Ref.Action String) |
+  RefAction (Ref.Action a) |
   ComboboxAction Combobox.Action
 
-init : String -> Address Action -> Update Model Action
-init url address =
+init : Context a -> Address (Action a) -> Update (Model a) (Action a)
+init context address =
   let result =
         {
           model =
             {
+              context =
+                context,
               ref =
                 initRef.model,
               combobox =
@@ -44,51 +54,55 @@ init url address =
         }
       initRef =
         Ref.init
-          {
-            url =
-              url,
-            codec =
-              Codec.string
-          }
+          context.ref
           (address `Signal.forwardTo` RefAction)
       initCombobox =
         Combobox.init ""
   in result
 
-comboboxContext : Model -> Combobox.Context
+comboboxContext : Model a -> Combobox.Context
 comboboxContext model =
   {
     inputText =
-      model.ref |> getInputText,
+      model |> getInputText,
     commands =
-      if modified model then
-        [
-          {
-            label =
-              "Set to “" ++ model.combobox.inputText ++ "”",
-            task =
-              model.ref
-              |> Ref.set model.combobox.inputText
-              |> TaskUtil.swallowError () "ElmFire.set failed"
-          }
-        ]
-      else
-        [],
+      model.combobox.inputText
+      |> model.context.fromString
+      |> Maybe.map (\value ->
+        if modified model then
+          [
+            {
+              label =
+                "Set to " ++ (value |> toString),
+              task =
+                model.ref
+                |> Ref.set value
+                |> TaskUtil.swallowError () "ElmFire.set failed"
+            }
+          ]
+        else
+          []
+      )
+      |> Maybe.withDefault [],
     style =
       Combobox.ContentEditable,
     extraAttributes =
       []
   }
 
-getInputText : Ref String -> String
-getInputText ref =
-  ref |> Ref.get |> Result.toMaybe |> Maybe.withDefault ""
+getInputText : Model a -> String
+getInputText model =
+  model.ref
+  |> Ref.get
+  |> Result.toMaybe
+  |> Maybe.map model.context.toString
+  |> Maybe.withDefault ""
 
-modified : Model -> Bool
+modified : Model a -> Bool
 modified model =
-  (model.ref |> getInputText) /= model.combobox.inputText
+  (model |> getInputText) /= model.combobox.inputText
 
-update : Action -> Model -> Update Model Action
+update : Action a -> Model a -> Update (Model a) (Action a)
 update action model =
   case action of
     None ->
@@ -97,18 +111,19 @@ update action model =
       let result =
             {
               model =
-                { model |
-                  ref <- updateRef.model,
+                { modelWithUpdatedRef |
                   combobox <- updatedCombobox },
               effects =
                 updateRef.effects |> Effects.map RefAction
             }
           updateRef =
             Ref.update refAction model.ref
+          modelWithUpdatedRef =
+            { model | ref <- updateRef.model }
           updatedCombobox =
             case refAction of
               Ref.ValueChanged _ -> -- XXX handle editing conflict
-                { combobox | inputText <- updateRef.model |> getInputText }
+                { combobox | inputText <- modelWithUpdatedRef |> getInputText }
               _ ->
                 combobox
           combobox =
@@ -129,7 +144,7 @@ update action model =
               model.combobox
       in result
 
-view : Address Action -> Model -> Html
+view : Address (Action a) -> Model a -> Html
 view address model =
   let result =
         Html.div

@@ -23,7 +23,8 @@ import ElmFireSync.ItemHandler exposing (ItemHandler)
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.ListRef as ListRef exposing (ListRef)
 import StructuralEditor.Combobox as Combobox
-import StructuralEditor.StringEditor as StringEditor
+import StructuralEditor.EditorContext as EditorContext
+import StructuralEditor.ValueEditor as ValueEditor
 import StructuralEditor.Styles as Styles
 
 -- TODO fix lost focus when deleting last item or before cursor
@@ -34,10 +35,13 @@ import StructuralEditor.Styles as Styles
 type alias Model =
   {
     context: Context,
-    listRef: ListRef StringEditor.Model StringEditor.Action,
+    listRef: ListRef (ValueEditor.Model Element) (ValueEditor.Action Element),
     inserter: Combobox.Model,
     inserterPosition: Maybe Position
   }
+
+type alias Element =
+  String
 
 type alias Context =
   {
@@ -84,8 +88,8 @@ type Position =
 
 type Action =
   None |
-  Delete (ListRef.Item StringEditor.Model) |
-  ListRefAction (ListRef.Action StringEditor.Action) |
+  Delete (ListRef.Item (ValueEditor.Model Element)) |
+  ListRefAction (ListRef.Action (ValueEditor.Action Element)) |
   InserterAction Combobox.Action |
   SetInserterPosition (Maybe Position)
 
@@ -120,17 +124,17 @@ init context address =
         address `Signal.forwardTo` ListRefAction
   in result
 
-editorItemHandler : Address (ListRef.Action StringEditor.Action) -> ItemHandler StringEditor.Model StringEditor.Action
+editorItemHandler : Address (ListRef.Action (ValueEditor.Action Element)) -> ItemHandler (ValueEditor.Model Element) (ValueEditor.Action Element)
 editorItemHandler address =
   {
     init url =
-      StringEditor.init url (address `Signal.forwardTo` (ListRef.ItemAction url)),
+      ValueEditor.init (EditorContext.string url) (address `Signal.forwardTo` (ListRef.ItemAction url)),
     done model =
       model.ref
       |> Ref.unsubscribe
-      |> TaskUtil.swallowError StringEditor.None "Unsubscription failed",
+      |> TaskUtil.swallowError ValueEditor.None "Unsubscription failed",
     update =
-      StringEditor.update
+      ValueEditor.update
   }
 
 update : Address Action -> Action -> Model -> Update Model Action
@@ -227,15 +231,15 @@ view address model =
           []
   in result
 
-viewEditor : Address Action -> Model -> String -> ListRef.Item StringEditor.Model -> Html
+viewEditor : Address Action -> Model -> String -> ListRef.Item (ValueEditor.Model Element) -> Html
 viewEditor address model url item =
-  StringEditor.view
+  ValueEditor.view
     (address `Signal.forwardTo` (\itemAction ->
       itemAction |> ListRef.ItemAction url |> ListRefAction)
     )
     item.data
 
-viewTransformer : Bool -> Address Action -> Model -> String -> ListRef.Item StringEditor.Model -> Html
+viewTransformer : Bool -> Address Action -> Model -> String -> ListRef.Item (ValueEditor.Model Element) -> Html
 viewTransformer after address model url item =
   let result =
         Html.span
