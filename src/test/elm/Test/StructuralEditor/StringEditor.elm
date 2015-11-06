@@ -5,6 +5,7 @@ import Task exposing (Task)
 import Html exposing (Html)
 import Effects exposing (Never)
 import StartApp exposing (App)
+import ElmFire exposing (Location)
 import Component
 import StructuralEditor.EditorKind as EditorKind
 import StructuralEditor.ValueEditor as ValueEditor
@@ -31,7 +32,7 @@ app =
   Component.start
     {
       init =
-        ValueEditor.init EditorKind.string url actionMailbox.address,
+        ValueEditor.init EditorKind.string location actionMailbox.address,
       update =
         ValueEditor.update,
       view =
@@ -40,9 +41,9 @@ app =
         inputs
     }
 
-url : String
-url =
-  "https://thsoft.firebaseio.com/DUX/test/StringEditor"
+location : Location
+location =
+  "https://thsoft.firebaseio.com/DUX/test/StringEditor" |> ElmFire.fromUrl
 
 actionMailbox : Mailbox Action
 actionMailbox =

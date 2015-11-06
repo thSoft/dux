@@ -6,14 +6,14 @@ import Task exposing (Task)
 import Effects exposing (Effects)
 import Debug
 import Task.Extra
-import ElmFire exposing (Priority(..), Snapshot)
+import ElmFire exposing (Location, Priority(..), Snapshot)
 import TaskUtil
 import Component exposing (Update)
 import ElmFireSync.ItemHandler exposing (ItemHandler)
 
 type alias ListRef model action =
   {
-    url: String,
+    location: Location,
     itemHandler: ItemHandler model action,
     items: Dict String (Item model)
   }
@@ -31,16 +31,16 @@ type Action action =
   ChildMoved Snapshot |
   ItemAction String action
 
-init : ItemHandler model action -> String -> Address (Action action) -> Update (ListRef model action) (Action action)
-init itemHandler url address =
+init : ItemHandler model action -> Location -> Address (Action action) -> Update (ListRef model action) (Action action)
+init itemHandler location address =
   let result =
         {
           model =
             {
               itemHandler =
                 itemHandler,
-              url =
-                url,
+              location =
+                location,
               items =
                 Dict.empty
             },
@@ -62,7 +62,7 @@ init itemHandler url address =
             |> Task.map (always ())
           )
           (query <| ElmFire.noOrder)
-          (url |> ElmFire.fromUrl)
+          location
         |> TaskUtil.swallowError None "Subscription failed"
         |> Effects.task
   in result

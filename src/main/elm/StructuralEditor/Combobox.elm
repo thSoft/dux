@@ -187,7 +187,8 @@ view context address model =
                   ("position", "absolute"),
                   ("z-index", "1"),
                   ("display", "table"),
-                  ("box-shadow", "0px 2px 2px 2px #aaaaaa")
+                  ("box-shadow", "0 2px 8px 1px rgba(0, 0, 0, 0.3)"),
+                  ("border-radius", "4px")
                 ]
               ]
               commands
@@ -212,8 +213,7 @@ view context address model =
       selectedStyle selected =
         if selected then
           [
-            ("background", "linear-gradient(to bottom, #0066ee, #0033cc)"),
-            ("color", "white")
+            ("background", "linear-gradient(to bottom, #eeeeee, #dddddd)")
           ]
         else
           []

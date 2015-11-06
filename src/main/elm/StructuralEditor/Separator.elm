@@ -29,7 +29,7 @@ line =
             ("content", " "),
             ("display", "block"),
             ("margin", "0.25em"),
-            ("line-height", "1.6")
+            ("line-height", "2")
           ]
         ]
         [],

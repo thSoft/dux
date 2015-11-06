@@ -6,6 +6,7 @@ import Html.Attributes as Attributes
 import Effects exposing (Never)
 import Component exposing (Update)
 import TaskUtil
+import ElmFire exposing (Location)
 import ElmFireSync.Ref as Ref exposing (Ref)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.EditorKind exposing (EditorKind)
@@ -23,8 +24,8 @@ type Action a =
   RefAction (Ref.Action a) |
   ComboboxAction Combobox.Action
 
-init : EditorKind a -> String -> Address (Action a) -> Update (Model a) (Action a)
-init kind url address =
+init : EditorKind a -> Location -> Address (Action a) -> Update (Model a) (Action a)
+init kind location address =
   let result =
         {
           model =
@@ -42,7 +43,7 @@ init kind url address =
       initRef =
         Ref.init
           kind.codec
-          url
+          location
           (address `Signal.forwardTo` RefAction)
       initCombobox =
         Combobox.init ""

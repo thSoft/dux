@@ -12,7 +12,7 @@ import ElmFireSync.Codec exposing (Codec)
 type alias Ref a =
   {
     codec: Codec a,
-    url: String,
+    location: Location,
     state: Result NoSubscription (State a)
   }
 
@@ -37,21 +37,20 @@ type Action a =
   Subscribed Subscription |
   ValueChanged Snapshot
 
-init : Codec a -> String -> Address (Action a) -> Update (Ref a) (Action a)
-init codec url address =
+init : Codec a -> Location -> Address (Action a) -> Update (Ref a) (Action a)
+init codec location address =
   {
     model =
       {
-        url =
-          url,
+        location =
+          location,
         codec =
           codec,
         state =
           Err NotSubscribed
       },
     effects =
-      url
-      |> ElmFire.fromUrl
+      location
       |> ElmFire.subscribe
         (\snapshot ->
           snapshot |> ValueChanged |> Signal.send address
@@ -154,12 +153,12 @@ set value model =
       priority =
         model |> getPriority
       location =
-        model.url |> ElmFire.fromUrl
+        model.location
   in result
 
 delete : Ref a -> Task ElmFire.Error Reference
 delete model =
-  model.url |> ElmFire.fromUrl |> ElmFire.remove
+  model.location |> ElmFire.remove
 
 {-- Do not call!
 -}

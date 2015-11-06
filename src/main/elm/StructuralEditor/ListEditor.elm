@@ -37,7 +37,7 @@ type alias Model a =
 
 type alias Context =
   {
-    url: String,
+    location: Location,
     separator: Separator
   }
 
@@ -73,7 +73,7 @@ init itemKind context address =
             initListRef.effects |> Effects.map ListRefAction
         }
       initListRef =
-        ListRef.init (editorItemHandler listRefAddress itemKind) context.url listRefAddress
+        ListRef.init (editorItemHandler listRefAddress itemKind) context.location listRefAddress
       listRefAddress =
         address `Signal.forwardTo` ListRefAction
   in result
@@ -82,7 +82,7 @@ editorItemHandler : Address (ListRef.Action (ValueEditor.Action a)) -> EditorKin
 editorItemHandler address itemKind =
   {
     init url =
-      ValueEditor.init itemKind url (address `Signal.forwardTo` (ListRef.ItemAction url)),
+      ValueEditor.init itemKind (url |> ElmFire.fromUrl) (address `Signal.forwardTo` (ListRef.ItemAction url)),
     done model =
       model.ref
       |> Ref.unsubscribe
@@ -268,8 +268,7 @@ inserterContext model =
               label =
                 "Insert " ++ (value |> toString),
               task =
-                model.listRef.url
-                |> ElmFire.fromUrl
+                model.listRef.location
                 |> ElmFire.push
                 |> ElmFire.open
                 |> TaskUtil.andThen (\reference ->
@@ -289,7 +288,7 @@ inserterRef : Model a -> Reference -> Ref a
 inserterRef model reference =
   Ref.init
     model.itemKind.codec
-    (reference |> ElmFire.toUrl)
+    (reference |> ElmFire.location)
     inserterRefActionMailbox.address -- dummy
   |> .model
 

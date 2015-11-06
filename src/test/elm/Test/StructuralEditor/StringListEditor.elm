@@ -6,6 +6,7 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Effects exposing (Never)
 import StartApp exposing (App)
+import ElmFire exposing (Location)
 import Component
 import StructuralEditor.ListEditor as ListEditor
 import StructuralEditor.EditorKind as EditorKind
@@ -45,8 +46,8 @@ app =
 context : ListEditor.Context
 context =
   {
-    url =
-      "https://thsoft.firebaseio.com/DUX/test/StringListEditor",
+    location =
+      "https://thsoft.firebaseio.com/DUX/test/StringListEditor" |> ElmFire.fromUrl,
     separator =
       Separator.line
   }
@@ -64,7 +65,8 @@ wrap html =
   Html.div
     [
       Attributes.style [
-        ("font-family", fontFamily ++ ", Monaco, Consolas, 'Courier New', Courier")
+        ("font-family", fontFamily ++ ", Helvetica, sans-serif"),
+        ("font-size", "90%")
       ]
     ]
     [
@@ -83,7 +85,7 @@ wrap html =
 
 fontFamily : String
 fontFamily =
-  "Inconsolata"
+  "Open Sans"
 
 script : String
 script = """
