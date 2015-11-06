@@ -14,7 +14,6 @@ import StructuralEditor.Styles as Styles
 type alias Model a =
   {
     kind: EditorKind a,
-    url: String,
     ref: Ref a,
     combobox: Combobox.Model
   }
@@ -30,8 +29,6 @@ init kind url address =
         {
           model =
             {
-              url =
-                url,
               kind =
                 kind,
               ref =
