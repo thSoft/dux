@@ -1,8 +1,8 @@
 module Component where
 
-import Signal exposing (Address, Mailbox)
+import Signal exposing (Address)
 import Html exposing (Html)
-import Effects exposing (Effects, Never)
+import Effects exposing (Effects)
 import StartApp exposing (App)
 
 type alias Component model action =
@@ -28,8 +28,17 @@ return model =
       Effects.none
   }
 
-run : Component model action -> App model
-run component =
+returnAndRun: Effects action -> model -> Update model action
+returnAndRun effects model =
+  {
+    model =
+      model,
+    effects =
+      effects
+  }
+
+start : Component model action -> App model
+start component =
   StartApp.start
     {
       init =

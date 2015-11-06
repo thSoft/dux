@@ -4,7 +4,6 @@ import Signal exposing (Address)
 import Json.Decode as Decode exposing (Value, Decoder)
 import Task exposing (Task)
 import Effects exposing (Never)
-import Debug
 import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
 import TaskUtil
 import Component exposing (Update)

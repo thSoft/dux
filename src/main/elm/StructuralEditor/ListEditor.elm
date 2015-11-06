@@ -1,15 +1,9 @@
 module StructuralEditor.ListEditor where
 
-import Debug
 import Array
 import Random
-import Keyboard exposing (KeyCode)
-import String
 import Dict exposing (Dict)
-import Json.Decode as Decode
-import Json.Encode as Encode
 import Signal exposing (Address, Mailbox)
-import Task exposing (Task)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
@@ -18,7 +12,6 @@ import ElmFire exposing (Location, Reference, Priority(..))
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 import TaskUtil
-import ElmFireSync.Codec as Codec
 import ElmFireSync.ItemHandler exposing (ItemHandler)
 import ElmFireSync.Ref as Ref exposing (Ref)
 import ElmFireSync.ListRef as ListRef exposing (ListRef)

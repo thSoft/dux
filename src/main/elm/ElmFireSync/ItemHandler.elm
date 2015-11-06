@@ -2,9 +2,7 @@ module ElmFireSync.ItemHandler where
 
 import Task exposing (Task)
 import Effects exposing (Never)
-import ElmFire
 import Component exposing (Update)
-import ElmFireSync.Ref exposing (Ref)
 
 type alias ItemHandler model action =
   {

@@ -1,18 +1,11 @@
 module StructuralEditor.ValueEditor where
 
-import Keyboard exposing (KeyCode)
-import Json.Decode as Decode exposing (Decoder)
-import String
 import Signal exposing (Address)
 import Html exposing (Html, Attribute)
 import Html.Attributes as Attributes
-import Html.Events as Events
-import Task exposing (Task)
 import Effects exposing (Never)
-import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 import TaskUtil
-import ElmFireSync.Codec as Codec
 import ElmFireSync.Ref as Ref exposing (Ref)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.EditorKind exposing (EditorKind)

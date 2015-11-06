@@ -10,7 +10,6 @@ import ElmFire exposing (Priority(..), Snapshot)
 import TaskUtil
 import Component exposing (Update)
 import ElmFireSync.ItemHandler exposing (ItemHandler)
-import ElmFireSync.Ref as Ref exposing (Ref)
 
 type alias ListRef model action =
   {

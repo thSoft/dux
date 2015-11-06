@@ -1,8 +1,5 @@
 module StructuralEditor.Styles where
 
-import Html
-import Html.Attributes as Attributes
-
 bordered : String -> List (String, String)
 bordered borderColor =
   [

@@ -4,7 +4,6 @@ import Keyboard exposing (KeyCode)
 import Array
 import String
 import Regex
-import Time
 import Signal exposing (Address, Message)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode

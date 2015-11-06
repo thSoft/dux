@@ -6,7 +6,6 @@ import Html exposing (Html)
 import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
-import ElmFireSync.Codec as Codec
 import StructuralEditor.EditorKind as EditorKind
 import StructuralEditor.ValueEditor as ValueEditor
 
@@ -29,7 +28,7 @@ type alias Action =
 
 app : App Model
 app =
-  Component.run
+  Component.start
     {
       init =
         ValueEditor.init EditorKind.string url actionMailbox.address,

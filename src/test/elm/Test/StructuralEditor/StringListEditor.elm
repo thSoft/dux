@@ -7,7 +7,6 @@ import Html.Attributes as Attributes
 import Effects exposing (Never)
 import StartApp exposing (App)
 import Component
-import ElmFireSync.Codec as Codec
 import StructuralEditor.ListEditor as ListEditor
 import StructuralEditor.EditorKind as EditorKind
 import StructuralEditor.Separator as Separator
@@ -31,7 +30,7 @@ type alias Action =
 
 app : App Model
 app =
-  Component.run
+  Component.start
     {
       init =
         ListEditor.init EditorKind.string context actionMailbox.address,
@@ -86,6 +85,7 @@ fontFamily : String
 fontFamily =
   "Inconsolata"
 
+script : String
 script = """
 var observer = new MutationObserver(function(mutations) {
   mutations.forEach(function(mutation) {
