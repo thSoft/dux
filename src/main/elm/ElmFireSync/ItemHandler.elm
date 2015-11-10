@@ -1,12 +1,11 @@
 module ElmFireSync.ItemHandler where
 
-import Task exposing (Task)
-import Effects exposing (Never)
-import Component exposing (Update)
+import Signal exposing (Address)
+import Component exposing (Update, HandledTask)
 
 type alias ItemHandler model action =
   {
-    init: String -> Update model action,
-    done: model -> Task Never action,
-    update: action -> model -> Update model action
+    init: Address action -> String -> Update model,
+    done: Address action -> model -> HandledTask,
+    update: Address action -> action -> model -> Update model
   }

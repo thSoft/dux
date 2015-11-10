@@ -3,7 +3,6 @@ module StructuralEditor.ValueEditor where
 import Signal exposing (Address)
 import Html exposing (Html, Attribute)
 import Html.Attributes as Attributes
-import Effects exposing (Never)
 import Component exposing (Update)
 import TaskUtil
 import ElmFire exposing (Location)
@@ -24,22 +23,19 @@ type Action a =
   RefAction (Ref.Action a) |
   ComboboxAction Combobox.Action
 
-init : EditorKind a -> Location -> Address (Action a) -> Update (Model a) (Action a)
+init : EditorKind a -> Location -> Address (Action a) -> Update (Model a)
 init kind location address =
   let result =
-        {
-          model =
-            {
-              kind =
-                kind,
-              ref =
-                initRef.model,
-              combobox =
-                initCombobox
-            },
-          effects =
-            initRef.effects |> Effects.map RefAction
-        }
+        Component.returnAndRun
+          {
+            kind =
+              kind,
+            ref =
+              initRef.model,
+            combobox =
+              initCombobox
+          }
+          initRef.task
       initRef =
         Ref.init
           kind.codec
@@ -66,7 +62,7 @@ comboboxContext model =
               task =
                 model.ref
                 |> Ref.set value
-                |> TaskUtil.swallowError () "ElmFire.set failed"
+                |> TaskUtil.swallowError "ElmFire.set failed"
             }
           ]
         else
@@ -91,20 +87,16 @@ modified : Model a -> Bool
 modified model =
   (model |> getInputText) /= model.combobox.inputText
 
-update : Action a -> Model a -> Update (Model a) (Action a)
+update : Action a -> Model a -> Update (Model a)
 update action model =
   case action of
     None ->
       Component.return model
     RefAction refAction ->
       let result =
-            {
-              model =
-                { modelWithUpdatedRef |
-                  combobox <- updatedCombobox },
-              effects =
-                updateRef.effects |> Effects.map RefAction
-            }
+            Component.returnAndRun
+              { modelWithUpdatedRef | combobox <- updatedCombobox }
+              updateRef.task
           updateRef =
             Ref.update refAction model.ref
           modelWithUpdatedRef =
@@ -120,12 +112,9 @@ update action model =
       in result
     ComboboxAction comboboxAction ->
       let result =
-            {
-              model =
-                { model | combobox <- updateCombobox.model },
-              effects =
-                updateCombobox.effects |> Effects.map ComboboxAction
-            }
+            Component.returnAndRun
+              { model | combobox <- updateCombobox.model }
+              updateCombobox.task
           updateCombobox =
             Combobox.update
               (comboboxContext model)

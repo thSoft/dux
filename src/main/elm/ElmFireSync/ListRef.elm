@@ -3,7 +3,6 @@ module ElmFireSync.ListRef where
 import Dict exposing (Dict)
 import Signal exposing (Address, Mailbox)
 import Task exposing (Task)
-import Effects exposing (Effects)
 import Debug
 import Task.Extra
 import ElmFire exposing (Location, Priority(..), Snapshot)
@@ -31,55 +30,52 @@ type Action action =
   ChildMoved Snapshot |
   ItemAction String action
 
-init : ItemHandler model action -> Location -> Address (Action action) -> Update (ListRef model action) (Action action)
+init : ItemHandler model action -> Location -> Address (Action action) -> Update (ListRef model action)
 init itemHandler location address =
   let result =
-        {
-          model =
-            {
-              itemHandler =
-                itemHandler,
-              location =
-                location,
-              items =
-                Dict.empty
-            },
-          effects =
-            Effects.batch [
+        Component.returnAndRun
+          {
+            itemHandler =
+              itemHandler,
+            location =
+              location,
+            items =
+              Dict.empty
+          }
+          (
+            Task.Extra.parallel [
               subscribe ChildAdded ElmFire.childAdded,
               subscribe ChildRemoved ElmFire.childRemoved,
               subscribe ChildMoved ElmFire.childMoved
             ]
-        }
+            |> Task.map (always ())
+          )
       subscribe action query =
         ElmFire.subscribe
           (\snapshot ->
             snapshot |> action |> Signal.send address
           )
           (\cancellation ->
-            cancellation |> Debug.log "Subscription cancelled"
+            cancellation
+            |> Debug.log "Subscription cancelled"
             |> Task.succeed
             |> Task.map (always ())
           )
           (query <| ElmFire.noOrder)
           location
-        |> TaskUtil.swallowError None "Subscription failed"
-        |> Effects.task
+        |> TaskUtil.swallowError "Subscription failed"
   in result
 
-update : Address (Action action) -> Action action -> ListRef model action -> Update (ListRef model action) (Action action)
+update : Address (Action action) -> Action action -> ListRef model action -> Update (ListRef model action)
 update address action model =
   case action of
     None ->
       Component.return model
     ChildAdded snapshot ->
       let result =
-            {
-              model =
-                { model | items <- model.items |> Dict.insert url item },
-              effects =
-                itemUpdate.effects |> Effects.map (ItemAction url)
-            }
+            Component.returnAndRun
+              { model | items <- model.items |> Dict.insert url item }
+              itemUpdate.task
           url =
             snapshot.reference |> ElmFire.toUrl
           item =
@@ -90,31 +86,30 @@ update address action model =
                 itemUpdate.model
             }
           itemUpdate =
-            url |> model.itemHandler.init
+            model.itemHandler.init itemAddress url
           itemAddress =
             address `Signal.forwardTo` (ItemAction url)
       in result
     ChildRemoved snapshot ->
       let result =
             model.items |> Dict.get url |> Maybe.map (\item ->
-              {
-                model =
-                  { model |
-                    items <- model.items |> Dict.remove url },
-                effects =
+              Component.returnAndRun
+                { model | items <- model.items |> Dict.remove url }
+                (
                   item.data
-                  |> model.itemHandler.done
-                  |> Effects.task
-                  |> Effects.map (ItemAction url)
-              }
+                  |> model.itemHandler.done itemAddress
+                )
             ) |> Maybe.withDefault (Component.return model)
           url =
             snapshot.reference |> ElmFire.toUrl
+          itemAddress =
+            address `Signal.forwardTo` (ItemAction url)
       in result
     ChildMoved snapshot ->
       let result =
             Component.return
-              { model | items <-
+              { model |
+                items <-
                   model.items |> Dict.update url (Maybe.map (\item ->
                     { item | priority <- snapshot.priority }
                   ))
@@ -125,17 +120,15 @@ update address action model =
     ItemAction url itemAction ->
       model.items |> Dict.get url |> Maybe.map (\item ->
         let result =
-              {
-                model =
-                  { model |
-                    items <- model.items |> Dict.update url (always updatedItem) },
-                effects =
-                  itemUpdate.effects |> Effects.map (ItemAction url)
-              }
+              Component.returnAndRun
+                { model | items <- model.items |> Dict.update url (always updatedItem) }
+                itemUpdate.task
             updatedItem =
               Just { item | data <- itemUpdate.model }
             itemUpdate =
-              model.itemHandler.update itemAction item.data
+              model.itemHandler.update itemAddress itemAction item.data
+            itemAddress =
+              address `Signal.forwardTo` (ItemAction url)
         in result
       ) |> Maybe.withDefault (Component.return model)
 

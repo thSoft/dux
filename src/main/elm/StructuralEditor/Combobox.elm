@@ -11,7 +11,6 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Task exposing (Task)
-import Effects exposing (Effects, Never)
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 
@@ -38,7 +37,7 @@ type alias Context =
 type alias Command =
   {
     label: String,
-    task: Task Never ()
+    task: Task () ()
   }
 
 type Style =
@@ -66,7 +65,7 @@ type Action =
   MoveToFirst |
   MoveToLast
 
-update : Context -> Action -> Model -> Update Model Action
+update : Context -> Action -> Model -> Update Model
 update context action model =
   case action of
     None ->
@@ -78,14 +77,9 @@ update context action model =
       Component.return
         { model | menuVisible <- menuVisible }
     Submit command ->
-      {
-        model =
-          model,
-        effects =
-          command.task
-          |> Task.map (always None)
-          |> Effects.task
-      }
+      Component.returnAndRun
+        model
+        command.task
     MoveToNext ->
       Component.return (moveBy 1 context model)
     MoveToPrevious ->

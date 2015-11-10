@@ -4,21 +4,19 @@ import Signal exposing (Mailbox)
 import Task exposing (Task)
 import Html exposing (Html)
 import Html.Attributes as Attributes
-import Effects exposing (Never)
-import StartApp exposing (App)
 import ElmFire exposing (Location)
-import Component
+import Component exposing (Output)
 import StructuralEditor.ListEditor as ListEditor
 import StructuralEditor.EditorKind as EditorKind
 import StructuralEditor.Separator as Separator
 
 main : Signal Html
 main =
-  app.html
+  output.html
 
-port tasks : Signal (Task Never ())
+port tasks : Signal (Task () ())
 port tasks =
-  app.tasks
+  output.tasks
 
 type alias Element =
   String
@@ -26,21 +24,18 @@ type alias Element =
 type alias Model =
   ListEditor.Model Element
 
-type alias Action =
-  ListEditor.Action Element
-
-app : App Model
-app =
+output : Output Model
+output =
   Component.start
     {
       init =
-        ListEditor.init EditorKind.string context actionMailbox.address,
+        ListEditor.init EditorKind.string context,
       update =
-        ListEditor.update actionMailbox.address,
+        ListEditor.update,
       view address model =
         ListEditor.view address model |> wrap,
       inputs =
-        inputs
+        []
     }
 
 context : ListEditor.Context
@@ -51,14 +46,6 @@ context =
     separator =
       Separator.line
   }
-
-actionMailbox : Mailbox Action
-actionMailbox =
-  Signal.mailbox ListEditor.None
-
-inputs : List (Signal Action)
-inputs =
-  [actionMailbox.signal]
 
 wrap : Html -> Html
 wrap html =

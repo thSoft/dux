@@ -7,7 +7,6 @@ import Signal exposing (Address, Mailbox)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
-import Effects exposing (Effects, Never)
 import ElmFire exposing (Location, Reference, Priority(..))
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
@@ -52,60 +51,55 @@ type Action a =
   InserterAction Combobox.Action |
   SetInserterPosition (Maybe Position)
 
-init : EditorKind a -> Context -> Address (Action a) -> Update (Model a) (Action a)
+init : EditorKind a -> Context -> Address (Action a) -> Update (Model a)
 init itemKind context address =
   let result =
-        {
-          model =
-            {
-              itemKind =
-                itemKind,
-              context =
-                context,
-              listRef =
-                initListRef.model,
-              inserter =
-                Combobox.init "",
-              inserterPosition =
-                Nothing
-            },
-          effects =
-            initListRef.effects |> Effects.map ListRefAction
-        }
+        Component.returnAndRun
+          {
+            itemKind =
+              itemKind,
+            context =
+              context,
+            listRef =
+              initListRef.model,
+            inserter =
+              Combobox.init "",
+            inserterPosition =
+              Nothing
+          }
+          initListRef.task
       initListRef =
-        ListRef.init (editorItemHandler listRefAddress itemKind) context.location listRefAddress
+        ListRef.init (editorItemHandler itemKind) context.location listRefAddress
       listRefAddress =
         address `Signal.forwardTo` ListRefAction
   in result
 
-editorItemHandler : Address (ListRef.Action (ValueEditor.Action a)) -> EditorKind a -> ItemHandler (ValueEditor.Model a) (ValueEditor.Action a)
-editorItemHandler address itemKind =
+editorItemHandler : EditorKind a -> ItemHandler (ValueEditor.Model a) (ValueEditor.Action a)
+editorItemHandler itemKind =
   {
-    init url =
-      ValueEditor.init itemKind (url |> ElmFire.fromUrl) (address `Signal.forwardTo` (ListRef.ItemAction url)),
-    done model =
+    init address url =
+      ValueEditor.init itemKind (url |> ElmFire.fromUrl) address,
+    done _ model =
       model.ref
       |> Ref.unsubscribe
-      |> TaskUtil.swallowError ValueEditor.None "Unsubscription failed",
+      |> TaskUtil.swallowError "Unsubscription failed",
     update =
-      ValueEditor.update
+      always ValueEditor.update
   }
 
-update : Address (Action a) -> Action a -> Model a -> Update (Model a) (Action a)
+update : Address (Action a) -> Action a -> Model a -> Update (Model a)
 update address action model =
   case action of
     None ->
       Component.return model
     Delete item ->
-      {
-        model =
-          model,
-        effects =
+      Component.returnAndRun
+        model
+        (
           item.data.ref
           |> Ref.delete
-          |> TaskUtil.swallowError None "Failed to delete item"
-          |> Effects.task
-      }
+          |> TaskUtil.swallowError "Failed to delete item"
+        )
     SetInserterPosition inserterPosition ->
       let result =
             Component.return
@@ -120,32 +114,26 @@ update address action model =
       in result
     ListRefAction listRefAction ->
       let result =
-            {
-              model =
-                { model | listRef <- listRefUpdate.model },
-              effects =
-                listRefUpdate.effects |> Effects.map ListRefAction
-            }
+            Component.returnAndRun
+              { model | listRef <- listRefUpdate.model }
+              listRefUpdate.task
           listRefUpdate =
             ListRef.update (address `Signal.forwardTo` ListRefAction) listRefAction model.listRef
       in result
     InserterAction inserterAction ->
       let result =
-            {
-              model =
-                { model |
-                  inserter <-
-                    inserterUpdate.model,
-                  inserterPosition <-
-                    case inserterAction of
-                      Combobox.Submit _ ->
-                        Nothing
-                      _ ->
-                        model.inserterPosition
-                },
-              effects =
-                inserterUpdate.effects |> Effects.map InserterAction
-            }
+            Component.returnAndRun
+              { model |
+                inserter <-
+                  inserterUpdate.model,
+                inserterPosition <-
+                  case inserterAction of
+                    Combobox.Submit _ ->
+                      Nothing
+                    _ ->
+                      model.inserterPosition
+              }
+              inserterUpdate.task
           inserterUpdate =
             model.inserter |> Combobox.update (inserterContext model) inserterAction
       in result
@@ -277,7 +265,7 @@ inserterContext model =
                 |> TaskUtil.andThen (\reference ->
                   reference |> ElmFire.location |> ElmFire.setPriority (inserterPriority model)
                 )
-                |> TaskUtil.swallowError () "Failed to insert item"
+                |> TaskUtil.swallowError "Failed to insert item"
             }
           ]
         )

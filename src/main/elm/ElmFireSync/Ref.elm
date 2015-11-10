@@ -3,7 +3,6 @@ module ElmFireSync.Ref where
 import Signal exposing (Address)
 import Json.Decode as Decode exposing (Value, Decoder)
 import Task exposing (Task)
-import Effects exposing (Never)
 import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
 import TaskUtil
 import Component exposing (Update)
@@ -37,19 +36,18 @@ type Action a =
   Subscribed Subscription |
   ValueChanged Snapshot
 
-init : Codec a -> Location -> Address (Action a) -> Update (Ref a) (Action a)
+init : Codec a -> Location -> Address (Action a) -> Update (Ref a)
 init codec location address =
-  {
-    model =
-      {
-        location =
-          location,
-        codec =
-          codec,
-        state =
-          Err NotSubscribed
-      },
-    effects =
+  Component.returnAndRun
+    {
+      location =
+        location,
+      codec =
+        codec,
+      state =
+        Err NotSubscribed
+    }
+    (
       location
       |> ElmFire.subscribe
         (\snapshot ->
@@ -74,16 +72,13 @@ init codec location address =
           in result
         )
         (ElmFire.valueChanged <| ElmFire.noOrder)
-      |> Task.map Subscribed
-      |> TaskUtil.onError (\error ->
-        SubscriptionError error |> Task.succeed
-      )
-      |> Effects.task
-  }
+      |> TaskUtil.andThen (TaskUtil.notify address Subscribed)
+      |> TaskUtil.onError (TaskUtil.notify address SubscriptionError)
+    )
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : Action a -> Ref a -> Update (Ref a) (Action a)
+update : Action a -> Ref a -> Update (Ref a)
 update action model =
   case action of
     None ->
