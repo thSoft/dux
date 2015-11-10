@@ -135,7 +135,7 @@ view address model =
           "red"
         else
           "gray"
-      viewCombobox =
+      viewCombobox = -- TODO distinguish error state with image
         Combobox.view
           (comboboxContext model)
           (address `Signal.forwardTo` ComboboxAction)

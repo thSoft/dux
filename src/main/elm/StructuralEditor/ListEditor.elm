@@ -24,6 +24,7 @@ import StructuralEditor.Styles as Styles
 -- TODO move to next/previous element when pressing enter or right/left
 -- TODO implement move
 -- TODO implement priority fixing
+-- TODO fix child added & moved displayed as separate steps when inserting
 
 type alias Model a =
   {
