@@ -53,8 +53,8 @@ comboboxContext model =
     commands =
       model.combobox.inputText
       |> model.kind.stringConverter.fromString
-      |> Maybe.map (\value ->
-        if modified model then
+      |> List.concatMap (\value ->
+        if ((model.ref |> Ref.get) /= Ok value) || (modified model) then
           [
             {
               label =
@@ -67,8 +67,7 @@ comboboxContext model =
           ]
         else
           []
-      )
-      |> Maybe.withDefault [],
+      ),
     style =
       Combobox.ContentEditable,
     extraAttributes =

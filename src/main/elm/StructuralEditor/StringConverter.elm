@@ -5,7 +5,7 @@ import String
 type alias StringConverter a =
   {
     toString: a -> String,
-    fromString: String -> Maybe a
+    fromString: String -> List a
   }
 
 string : StringConverter String
@@ -13,8 +13,8 @@ string =
   {
     toString =
       identity,
-    fromString =
-      Just
+    fromString string =
+      [string]
   }
 
 int : StringConverter Int
@@ -22,17 +22,21 @@ int =
   {
     toString =
       toString,
-    fromString =
-      String.toInt >> Result.toMaybe
+    fromString string =
+      string |> String.toInt |> toList
   }
+
+toList : Result x a -> List a
+toList result =
+  result |> Result.toMaybe |> Maybe.map (\value -> [value]) |> Maybe.withDefault []
 
 float : StringConverter Float
 float =
   {
     toString =
       toString,
-    fromString =
-      String.toFloat >> Result.toMaybe
+    fromString string =
+      string |> String.toFloat |> toList
   }
 
 bool : StringConverter Bool
@@ -41,12 +45,14 @@ bool =
     toString =
       toString,
     fromString string =
-      if "true" |> startsWithIgnoringCase string then
-        Just True
+      if string |> String.isEmpty then
+        []
+      else if "true" |> startsWithIgnoringCase string then
+        [True]
       else if "false" |> startsWithIgnoringCase string then
-        Just False
+        [False]
       else
-        Nothing
+        []
   }
 
 startsWithIgnoringCase : String -> String -> Bool

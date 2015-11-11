@@ -251,26 +251,23 @@ inserterContext model =
       commands =
         model.inserter.inputText
         |> model.itemKind.stringConverter.fromString
-        |> Maybe.map (\value ->
-          [
-            {
-              label =
-                "Insert " ++ (value |> toString),
-              task =
-                model.listRef.location
-                |> ElmFire.push
-                |> ElmFire.open
-                |> TaskUtil.andThen (\reference ->
-                  reference |> inserterRef model |> Ref.set value
-                )
-                |> TaskUtil.andThen (\reference ->
-                  reference |> ElmFire.location |> ElmFire.setPriority (inserterPriority model)
-                )
-                |> TaskUtil.swallowError "Failed to insert item"
-            }
-          ]
+        |> List.map (\value ->
+          {
+            label =
+              "Insert " ++ (value |> toString),
+            task =
+              model.listRef.location
+              |> ElmFire.push
+              |> ElmFire.open
+              |> TaskUtil.andThen (\reference ->
+                reference |> inserterRef model |> Ref.set value
+              )
+              |> TaskUtil.andThen (\reference ->
+                reference |> ElmFire.location |> ElmFire.setPriority (inserterPriority model)
+              )
+              |> TaskUtil.swallowError "Failed to insert item"
+          }
         )
-        |> Maybe.withDefault []
   in result
 
 inserterRef : Model a -> Reference -> Ref a
