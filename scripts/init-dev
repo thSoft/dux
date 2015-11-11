@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+cd ${0%/*}
+apm install language-elm
+apm install linter
+apm install linter-elm-make
