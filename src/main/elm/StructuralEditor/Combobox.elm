@@ -3,7 +3,6 @@ module StructuralEditor.Combobox where
 import Keyboard exposing (KeyCode)
 import Array
 import String
-import Regex
 import Signal exposing (Address, Message)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -14,10 +13,8 @@ import Task exposing (Task)
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 
--- TODO cancel
 -- TODO highlight input text in commands
 -- TODO command description
--- TODO don't filter commands?
 
 type alias Model =
   {
@@ -58,12 +55,9 @@ init initialInputText =
 type Action =
   None |
   SetInputText String |
+  SetCommandIndex Int |
   SetMenuVisible Bool |
-  Submit Command |
-  MoveToNext | -- TODO extract orthogonal MoveTo
-  MoveToPrevious |
-  MoveToFirst |
-  MoveToLast
+  Submit Command
 
 update : Context -> Action -> Model -> Update Model
 update context action model =
@@ -72,44 +66,24 @@ update context action model =
       Component.return model
     SetInputText inputText ->
       Component.return
-        { model | inputText <- inputText }
+        { model |
+          inputText <- inputText,
+          menuVisible <- True
+        }
+    SetCommandIndex commandIndex ->
+      Component.return (
+        if model.menuVisible then
+          { model | commandIndex <- commandIndex }
+        else
+          { model | menuVisible <- True }
+      )
     SetMenuVisible menuVisible ->
       Component.return
         { model | menuVisible <- menuVisible }
     Submit command ->
       Component.returnAndRun
-        model
+        { model | menuVisible <- False }
         command.task
-    MoveToNext ->
-      Component.return (moveBy 1 context model)
-    MoveToPrevious ->
-      Component.return (moveBy -1 context model)
-    MoveToFirst ->
-      Component.return
-        { model |
-          commandIndex <-
-            0
-        }
-    MoveToLast ->
-      Component.return
-        { model |
-          commandIndex <-
-            (getVisibleCommands context model |> List.length) - 1
-        }
-
-moveBy : Int -> Context -> Model -> Model
-moveBy delta context model =
-  let result =
-        if visibleItems |> List.isEmpty then
-          model
-        else
-          { model |
-            commandIndex <-
-              (model.commandIndex + delta) % (visibleItems |> List.length)
-          }
-      visibleItems =
-        getVisibleCommands context model
-  in result
 
 view : Context -> Address Action -> Model -> Html
 view context address model =
@@ -145,15 +119,36 @@ view context address model =
         SetInputText inputText |> Signal.message address
       handleKeyUp key =
         let action =
-              if | key == enter.keyCode -> submit
-                 | key == arrowDown.keyCode -> MoveToNext
-                 | key == arrowUp.keyCode -> MoveToPrevious
-                 | key == pageDown.keyCode -> MoveToLast
-                 | key == pageUp.keyCode -> MoveToFirst
-                 | otherwise -> None
+              if key == enter.keyCode then
+                submit
+              else if key == escape.keyCode then
+                SetMenuVisible False
+              else if key == arrowDown.keyCode then
+                SetCommandIndex next
+              else if key == arrowUp.keyCode then
+                SetCommandIndex previous
+              else if key == pageDown.keyCode then
+                SetCommandIndex last
+              else if key == pageUp.keyCode then
+                SetCommandIndex first
+              else
+                None
+            first =
+              0
+            last =
+              (context.commands |> List.length) - 1
+            next =
+              moveBy 1
+            previous =
+              moveBy -1
+            moveBy delta =
+              if context.commands |> List.isEmpty then
+                model.commandIndex
+              else
+                (model.commandIndex + delta) % (context.commands |> List.length)
         in action |> Signal.message address
       submit =
-        getVisibleCommands context model
+        context.commands
         |> Array.fromList
         |> Array.get model.commandIndex
         |> Maybe.map Submit
@@ -188,7 +183,7 @@ view context address model =
               commands
           ]
       commands =
-        visibleCommands
+        context.commands
         |> List.indexedMap (\index command ->
           Html.div
             [
@@ -202,8 +197,6 @@ view context address model =
               Html.text command.label
             ]
         )
-      visibleCommands =
-        getVisibleCommands context model
       selectedStyle selected =
         if selected then
           [
@@ -220,28 +213,6 @@ inputTextDecoder style =
       Events.targetValue
     ContentEditable ->
       Decode.at ["target", "textContent"] Decode.string
-
-getVisibleCommands : Context -> Model -> List Command
-getVisibleCommands context model =
-  if model.inputText == "" then
-    context.commands
-  else
-    context.commands |> List.filter (\command ->
-      command.label |> fuzzyContains model.inputText
-    )
-
-fuzzyContains : String -> String -> Bool
-fuzzyContains needle haystack =
-  needle |> String.words |> List.all (\word ->
-    if word |> String.isEmpty then
-      False
-    else
-      haystack |> containsIgnoreCase word
-  )
-
-containsIgnoreCase : String -> String -> Bool
-containsIgnoreCase needle haystack =
-  haystack |> Regex.contains (needle |> Regex.escape |> Regex.regex |> Regex.caseInsensitive)
 
 handleKeys : Bool -> List KeyCode -> Html.Attribute
 handleKeys enable keyCodes =
