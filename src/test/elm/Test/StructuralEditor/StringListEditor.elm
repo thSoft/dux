@@ -8,7 +8,7 @@ import ElmFire exposing (Location)
 import Component exposing (Output)
 import StructuralEditor.ListEditor as ListEditor
 import StructuralEditor.EditorKind as EditorKind
-import StructuralEditor.Separator as Separator
+import StructuralEditor.Separator as Separator exposing (Separator)
 
 main : Signal Html
 main =
@@ -29,23 +29,22 @@ output =
   Component.start
     {
       init =
-        ListEditor.init EditorKind.string context,
+        ListEditor.init EditorKind.string location,
       update =
         ListEditor.update,
       view address model =
-        ListEditor.view address model |> wrap,
+        ListEditor.view separator address model |> wrap,
       inputs =
         []
     }
 
-context : ListEditor.Context
-context =
-  {
-    location =
-      "https://thsoft.firebaseio.com/DUX/test/StringListEditor" |> ElmFire.fromUrl,
-    separator =
-      Separator.line
-  }
+location : Location
+location =
+  "https://thsoft.firebaseio.com/DUX/test/StringListEditor" |> ElmFire.fromUrl
+
+separator : Separator
+separator =
+  Separator.line
 
 wrap : Html -> Html
 wrap html =

@@ -1,80 +1,60 @@
 module ElmFireSync.ListRef where
 
 import Dict exposing (Dict)
-import Signal exposing (Address, Mailbox)
-import Task exposing (Task)
-import Debug
-import Task.Extra
-import ElmFire exposing (Location, Priority(..), Snapshot)
-import TaskUtil
+import Signal exposing (Address)
+import ElmFire exposing (Priority(..), Location)
 import Component exposing (Update)
 import ElmFireSync.ItemHandler exposing (ItemHandler)
+import ElmFireSync.Ref as Ref exposing (Ref)
 
-type alias ListRef model action =
-  {
-    location: Location,
-    itemHandler: ItemHandler model action,
-    items: Dict String (Item model)
-  }
+type alias ListRef data =
+  Ref (Model data)
 
-type alias Item model =
+type alias Model data =
+  Dict String (Item data)
+
+type alias Item data =
   {
     priority: Priority,
-    data: model
+    data: data
   }
 
-type Action action =
-  None |
-  ChildAdded Snapshot |
-  ChildRemoved Snapshot |
-  ChildMoved Snapshot |
-  ItemAction String action
+type alias Action action =
+  {
+    url: String,
+    action: action
+  }
 
-init : ItemHandler model action -> Location -> Address (Action action) -> Update (ListRef model action)
-init itemHandler location address =
-  let result =
-        Component.returnAndRun
-          {
-            itemHandler =
-              itemHandler,
-            location =
-              location,
-            items =
-              Dict.empty
-          }
-          (
-            Task.Extra.parallel [
-              subscribe ChildAdded ElmFire.childAdded,
-              subscribe ChildRemoved ElmFire.childRemoved,
-              subscribe ChildMoved ElmFire.childMoved
-            ]
-            |> Task.map (always ())
-          )
-      subscribe action query =
-        ElmFire.subscribe
-          (\snapshot ->
-            snapshot |> action |> Signal.send address
-          )
-          (\cancellation ->
-            cancellation
-            |> Debug.log "Subscription cancelled"
-            |> Task.succeed
-            |> Task.map (always ())
-          )
-          (query <| ElmFire.noOrder)
-          location
-        |> TaskUtil.swallowError "Subscription failed"
-  in result
+getAction : String -> action -> Action action
+getAction url action =
+  {
+    url =
+      url,
+    action =
+      action
+  }
 
-update : Address (Action action) -> Action action -> ListRef model action -> Update (ListRef model action)
-update address action model =
-  case action of
-    None ->
-      Component.return model
-    ChildAdded snapshot ->
+init : Location -> Address (Ref.Action action) -> Update (ListRef model)
+init =
+  Ref.init initialModel
+
+initialModel : Model data
+initialModel =
+  Dict.empty
+
+update : ItemHandler data action -> Address (Ref.Action (Action action)) -> Ref.Action (Action action) -> ListRef data -> Update (ListRef data)
+update itemHandler =
+  Ref.update (kind itemHandler)
+
+kind : ItemHandler data action -> Ref.Kind (Model data) (Action action)
+kind itemHandler =
+  {
+    valueChanged _ _ model =
+      Component.return model,
+    childAdded address snapshot model =
       let result =
             Component.returnAndRun
-              { model | items <- model.items |> Dict.insert url item }
+              (model |> Dict.insert url item)
               itemUpdate.task
           url =
             snapshot.reference |> ElmFire.toUrl
@@ -86,55 +66,58 @@ update address action model =
                 itemUpdate.model
             }
           itemUpdate =
-            model.itemHandler.init itemAddress url
+            itemHandler.init itemAddress url
           itemAddress =
-            address `Signal.forwardTo` (ItemAction url)
-      in result
-    ChildRemoved snapshot ->
+            address `Signal.forwardTo` (getAction url)
+      in result,
+    childRemoved address snapshot model =
       let result =
-            model.items |> Dict.get url |> Maybe.map (\item ->
+            model |> Dict.get url |> Maybe.map (\item ->
               Component.returnAndRun
-                { model | items <- model.items |> Dict.remove url }
+                (model |> Dict.remove url)
                 (
                   item.data
-                  |> model.itemHandler.done itemAddress
+                  |> itemHandler.done itemAddress
                 )
             ) |> Maybe.withDefault (Component.return model)
           url =
             snapshot.reference |> ElmFire.toUrl
           itemAddress =
-            address `Signal.forwardTo` (ItemAction url)
-      in result
-    ChildMoved snapshot ->
+            address `Signal.forwardTo` (Action url)
+      in result,
+    childMoved _ snapshot model =
       let result =
             Component.return
-              { model |
-                items <-
-                  model.items |> Dict.update url (Maybe.map (\item ->
-                    { item | priority <- snapshot.priority }
-                  ))
-              }
+              (model |> Dict.update url (Maybe.map (\item ->
+                { item | priority <- snapshot.priority }
+              )))
           url =
             snapshot.reference |> ElmFire.toUrl
-      in result
-    ItemAction url itemAction ->
-      model.items |> Dict.get url |> Maybe.map (\item ->
+      in result,
+    customAction address action model =
+      model |> Dict.get action.url |> Maybe.map (\item ->
         let result =
               Component.returnAndRun
-                { model | items <- model.items |> Dict.update url (always updatedItem) }
+                (model |> Dict.insert action.url updatedItem)
                 itemUpdate.task
             updatedItem =
-              Just { item | data <- itemUpdate.model }
+              { item | data <- itemUpdate.model }
             itemUpdate =
-              model.itemHandler.update itemAddress itemAction item.data
+              itemHandler.update itemAddress action.action item.data
             itemAddress =
-              address `Signal.forwardTo` (ItemAction url)
+              address `Signal.forwardTo` (getAction action.url)
         in result
       ) |> Maybe.withDefault (Component.return model)
+  }
 
-get : ListRef model action -> List (String, Item model)
-get model =
-  model.items |> Dict.toList |> List.sortBy internalPriority
+{-- Returns the list of items along with their URLs ordered by priority.
+-}
+get : Ref (Model model) -> List (String, Item model)
+get ref =
+  ref
+  |> Ref.getModel
+  |> Dict.toList
+  |> List.sortBy internalPriority
 
 internalPriority : (String, Item model) -> (Int, Float, String, String)
 internalPriority (url, item) =
@@ -145,14 +128,3 @@ internalPriority (url, item) =
       (1, priority, "", url)
     StringPriority priority ->
       (2, 0, priority, url)
-
--- TODO handle concurrency
-fixPriorities : ListRef model action -> Task ElmFire.Error ()
-fixPriorities model =
-  model
-  |> get
-  |> List.indexedMap (\index (url, item) ->
-    ElmFire.setPriority (index |> toFloat |> NumberPriority) (url |> ElmFire.fromUrl)
-  )
-  |> Task.Extra.parallel
-  |> Task.map (always ())

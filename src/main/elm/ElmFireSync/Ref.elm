@@ -1,167 +1,201 @@
 module ElmFireSync.Ref where
 
+import Debug
+import Dict exposing (Dict)
 import Signal exposing (Address)
-import Json.Decode as Decode exposing (Value, Decoder)
 import Task exposing (Task)
-import ElmFire exposing (Location, Subscription, Reference, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
+import Task.Extra
+import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
 import TaskUtil
 import Component exposing (Update)
-import ElmFireSync.Codec exposing (Codec)
 
-type alias Ref a =
+type alias Ref model =
   {
-    codec: Codec a,
     location: Location,
-    state: Result NoSubscription (State a)
+    subscriptions: Dict EventType (Result ElmFire.Error Subscription),
+    state: State model
   }
 
-type NoSubscription =
-  NotSubscribed |
-  SubscriptionFailed ElmFire.Error
+type alias EventType =
+  String -- XXX Elm doesn't support enums
 
-type alias State a =
+valueChanged : EventType
+valueChanged =
+  "valueChanged"
+
+childAdded : EventType
+childAdded =
+  "childAdded"
+
+childRemoved : EventType
+childRemoved =
+  "childRemoved"
+
+childMoved : EventType
+childMoved =
+  "childMoved"
+
+type alias State model =
   {
-    subscription: Subscription,
     priority: Priority,
-    data: Result NoData a
+    model: model
   }
 
-type NoData =
-  Loading |
-  DecodingFailed String
-
-type Action a =
+type Action action =
   None |
-  SubscriptionError ElmFire.Error |
-  Subscribed Subscription |
-  ValueChanged Snapshot
+  SubscriptionResult EventType (Result ElmFire.Error Subscription) |
+  Event EventType Snapshot |
+  CustomAction action
 
-init : Codec a -> Location -> Address (Action a) -> Update (Ref a)
-init codec location address =
-  Component.returnAndRun
-    {
-      location =
-        location,
-      codec =
-        codec,
-      state =
-        Err NotSubscribed
-    }
-    (
-      location
-      |> ElmFire.subscribe
-        (\snapshot ->
-          snapshot |> ValueChanged |> Signal.send address
-        )
-        (\cancellation ->
-          let result =
-                error |> SubscriptionError |> Signal.send address
-              error =
-                case cancellation of
-                  Unsubscribed _ ->
-                    cancellationError
-                  QueryError _ queryError ->
-                    queryError
-              cancellationError =
-                {
-                  tag =
-                    OtherFirebaseError,
-                  description =
-                    "Subscription was cancelled"
-                }
-          in result
-        )
-        (ElmFire.valueChanged <| ElmFire.noOrder)
-      |> TaskUtil.andThen (TaskUtil.notify address Subscribed)
-      |> TaskUtil.onError (TaskUtil.notify address SubscriptionError)
-    )
+init : model -> Location -> Address (Action action) -> Update (Ref model)
+init initialModel location address =
+  let result =
+        Component.returnAndRun model task
+      model =
+        {
+          location =
+            location,
+          subscriptions =
+            Dict.empty,
+          state =
+            {
+              priority =
+                NoPriority,
+              model =
+                initialModel
+            }
+        }
+      task =
+        [
+          subscribe valueChanged ElmFire.valueChanged,
+          subscribe childAdded ElmFire.childAdded,
+          subscribe childRemoved ElmFire.childRemoved,
+          subscribe childMoved ElmFire.childMoved
+        ]
+        |> Task.Extra.parallel
+        |> Task.map (always ())
+      subscribe eventType query =
+        location
+        |> ElmFire.subscribe
+          (\snapshot ->
+            snapshot |> Event eventType |> Signal.send address
+          )
+          (\cancellation ->
+            let result =
+                  error |> Err |> SubscriptionResult eventType |> Signal.send address
+                error =
+                  case cancellation of
+                    Unsubscribed _ ->
+                      cancellationError
+                    QueryError _ queryError ->
+                      queryError
+                cancellationError =
+                  {
+                    tag =
+                      OtherFirebaseError,
+                    description =
+                      "Subscription was cancelled"
+                  }
+            in result
+          )
+          (query <| ElmFire.noOrder)
+        |> TaskUtil.andThen (TaskUtil.notify address (Ok >> (SubscriptionResult eventType)))
+        |> TaskUtil.onError (TaskUtil.notify address (Err >> (SubscriptionResult eventType)))
+  in result
+
+type alias Kind model action =
+  {
+    valueChanged: EventHandler model action,
+    childAdded: EventHandler model action,
+    childRemoved: EventHandler model action,
+    childMoved: EventHandler model action,
+    customAction: Address action -> action -> model -> Update model
+  }
+
+type alias EventHandler model action =
+  Address action -> Snapshot -> model -> Update model
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : Action a -> Ref a -> Update (Ref a)
-update action model =
+update : Kind model action -> Address (Action action) -> Action action -> Ref model -> Update (Ref model)
+update kind address action ref =
   case action of
     None ->
-      Component.return model
-    SubscriptionError error ->
+      Component.return ref
+    SubscriptionResult eventType subscriptionResult ->
       Component.return
-        { model | state <- Err <| SubscriptionFailed error }
-    Subscribed subscription ->
+        { ref |
+          subscriptions <-
+            ref.subscriptions |> Dict.insert eventType subscriptionResult
+        }
+    Event eventType snapshot ->
       let result =
-            Component.return updatedModel
-          updatedModel =
-            model.state
-            |> Result.toMaybe
-            |> Maybe.map (always model) -- we are already subscribed
-            |> Maybe.withDefault { model | state <- Ok updatedState } -- not yet
+            Component.returnAndRun
+              { ref | state <- updatedState }
+              update.task
           updatedState =
             {
-              subscription =
-                subscription,
-              priority =
-                NoPriority,
-              data =
-                Err Loading
-            }
-      in result
-    ValueChanged snapshot ->
-      let result =
-            Component.return
-              { model | state <- Ok updatedState }
-          updatedState =
-            {
-              subscription =
-                snapshot.subscription,
               priority =
                 snapshot.priority,
-              data =
-                snapshot.value
-                |> Decode.decodeValue model.codec.decoder
-                |> Result.formatError DecodingFailed
+              model =
+                update.model
             }
+          update =
+            handler
+              (address `Signal.forwardTo` CustomAction)
+              snapshot
+              model
+          handler =
+            if eventType == valueChanged then
+                kind.valueChanged
+            else if eventType == childAdded then
+                kind.childAdded
+            else if eventType == childRemoved then
+                kind.childRemoved
+            else if eventType == childMoved then
+                kind.childMoved
+            else
+                dummyHandler |> Debug.log "unhandled event type"
+          dummyHandler _ _ _ =
+            Component.return model
+          model =
+            ref |> getModel
+      in result
+    CustomAction action ->
+      let result =
+            Component.returnAndRun
+              { ref | state <- updatedState }
+              update.task
+          updatedState =
+            { oldState | model <- update.model }
+          oldState =
+            ref.state
+          update =
+            kind.customAction
+              (address `Signal.forwardTo` CustomAction)
+              action
+              (ref |> getModel)
       in result
 
-type Error =
-  NoSubscription NoSubscription |
-  NoData NoData
+getModel : Ref model -> model
+getModel ref =
+  ref.state.model
 
-get : Ref a -> Result Error a
-get model =
-  (model.state |> Result.formatError NoSubscription)
-  `Result.andThen` (\state ->
-    state.data |> Result.formatError NoData
-  )
-
-getPriority : Ref a -> Priority
-getPriority model =
-  model.state
-  |> Result.toMaybe
-  |> Maybe.map .priority
-  |> Maybe.withDefault NoPriority
-
-set : a -> Ref a -> Task ElmFire.Error Reference
-set value model =
-  let result =
-        ElmFire.setWithPriority json priority location
-      json =
-        value |> model.codec.encode
-      priority =
-        model |> getPriority
-      location =
-        model.location
-  in result
-
-delete : Ref a -> Task ElmFire.Error Reference
-delete model =
-  model.location |> ElmFire.remove
+getPriority : Ref model -> Priority
+getPriority ref =
+  ref.state.priority
 
 {-- Do not call!
 -}
-unsubscribe : Ref a -> Task ElmFire.Error ()
-unsubscribe model =
-  model.state
-  |> Result.toMaybe
-  |> Maybe.map (\state ->
-    state.subscription |> ElmFire.unsubscribe
+unsubscribe : Ref model -> Task ElmFire.Error ()
+unsubscribe ref =
+  ref.subscriptions
+  |> Dict.values
+  |> List.map (\result ->
+    result
+    |> Result.toMaybe
+    |> Maybe.map ElmFire.unsubscribe
+    |> Maybe.withDefault (Task.succeed ())
   )
-  |> Maybe.withDefault (Task.succeed ())
+  |> Task.Extra.parallel
+  |> Task.map (always ())

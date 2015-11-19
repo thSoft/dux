@@ -29,7 +29,7 @@ output =
       init =
         ValueEditor.init EditorKind.string location,
       update =
-        always ValueEditor.update,
+        ValueEditor.update,
       view =
         ValueEditor.view,
       inputs =

@@ -34,7 +34,7 @@ output =
       init =
         ValueEditor.init editorKind location,
       update =
-        always ValueEditor.update,
+        ValueEditor.update,
       view =
         ValueEditor.view,
       inputs =

@@ -57,4 +57,4 @@ bool =
 
 startsWithIgnoringCase : String -> String -> Bool
 startsWithIgnoringCase pattern string =
-  string |> String.startsWith (pattern |> String.toLower)
+  string |> String.toLower |> String.startsWith (pattern |> String.toLower)

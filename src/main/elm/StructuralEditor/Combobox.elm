@@ -13,6 +13,7 @@ import Task exposing (Task)
 import Keyboard.Keys exposing (..)
 import Component exposing (Update)
 
+-- TODO fix click on menu commands due to onBlur
 -- TODO highlight input text in commands
 -- TODO command description
 

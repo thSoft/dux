@@ -1,29 +1,30 @@
 module StructuralEditor.ValueEditor where
 
 import Signal exposing (Address)
-import Html exposing (Html, Attribute)
+import Html exposing (Html)
 import Html.Attributes as Attributes
 import Component exposing (Update)
 import TaskUtil
 import ElmFire exposing (Location)
-import ElmFireSync.Ref as Ref exposing (Ref)
+import ElmFireSync.Ref as Ref
+import ElmFireSync.ValueRef as ValueRef exposing (ValueRef)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.EditorKind exposing (EditorKind)
 import StructuralEditor.Styles as Styles
 
-type alias Model a =
+type alias Model model =
   {
-    kind: EditorKind a,
-    ref: Ref a,
+    kind: EditorKind model,
+    ref: ValueRef model,
     combobox: Combobox.Model
   }
 
-type Action a =
+type Action action =
   None |
-  RefAction (Ref.Action a) |
+  RefAction (Ref.Action action) |
   ComboboxAction Combobox.Action
 
-init : EditorKind a -> Location -> Address (Action a) -> Update (Model a)
+init : EditorKind model -> Location -> Address (Action action) -> Update (Model model)
 init kind location address =
   let result =
         Component.returnAndRun
@@ -37,15 +38,14 @@ init kind location address =
           }
           initRef.task
       initRef =
-        Ref.init
-          kind.codec
+        ValueRef.init
           location
           (address `Signal.forwardTo` RefAction)
       initCombobox =
         Combobox.init ""
   in result
 
-comboboxContext : Model a -> Combobox.Context
+comboboxContext : Model model -> Combobox.Context
 comboboxContext model =
   {
     inputText =
@@ -54,14 +54,14 @@ comboboxContext model =
       model.combobox.inputText
       |> model.kind.stringConverter.fromString
       |> List.concatMap (\value ->
-        if ((model.ref |> Ref.get) /= Ok value) || (modified model) then
+        if ((model.ref |> Ref.getModel) /= Ok value) || (modified model) then
           [
             {
               label =
                 "Set to " ++ (value |> toString),
               task =
                 model.ref
-                |> Ref.set value
+                |> ValueRef.set model.kind.codec value
                 |> TaskUtil.swallowError "ElmFire.set failed"
             }
           ]
@@ -74,20 +74,20 @@ comboboxContext model =
       []
   }
 
-getInputText : Model a -> String
+getInputText : Model model -> String
 getInputText model =
   model.ref
-  |> Ref.get
+  |> Ref.getModel
   |> Result.toMaybe
   |> Maybe.map model.kind.stringConverter.toString
   |> Maybe.withDefault ""
 
-modified : Model a -> Bool
+modified : Model model -> Bool
 modified model =
   (model |> getInputText) /= model.combobox.inputText
 
-update : Action a -> Model a -> Update (Model a)
-update action model =
+update : Address (Action action) -> Action action -> Model model -> Update (Model model)
+update address action model =
   case action of
     None ->
       Component.return model
@@ -97,13 +97,20 @@ update action model =
               { modelWithUpdatedRef | combobox <- updatedCombobox }
               updateRef.task
           updateRef =
-            Ref.update refAction model.ref
+            ValueRef.update
+              model.kind.codec
+              (address `Signal.forwardTo` RefAction)
+              refAction
+              model.ref
           modelWithUpdatedRef =
             { model | ref <- updateRef.model }
           updatedCombobox =
             case refAction of
-              Ref.ValueChanged _ -> -- XXX handle editing conflict
-                { combobox | inputText <- modelWithUpdatedRef |> getInputText }
+              Ref.Event eventType _ ->
+                if eventType == Ref.valueChanged then
+                  { combobox | inputText <- modelWithUpdatedRef |> getInputText } -- XXX handle editing conflict
+                else
+                  combobox
               _ ->
                 combobox
           combobox =
@@ -121,7 +128,7 @@ update action model =
               model.combobox
       in result
 
-view : Address (Action a) -> Model a -> Html
+view : Address (Action action) -> Model model -> Html
 view address model =
   let result =
         Html.div
