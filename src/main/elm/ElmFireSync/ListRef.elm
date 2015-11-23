@@ -114,8 +114,7 @@ kind itemHandler =
 -}
 get : Ref (Model model) -> List (String, Item model)
 get ref =
-  ref
-  |> Ref.getModel
+  ref.model
   |> Dict.toList
   |> List.sortBy internalPriority
 

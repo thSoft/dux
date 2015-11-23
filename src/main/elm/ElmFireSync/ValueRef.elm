@@ -55,7 +55,7 @@ set codec value ref =
       json =
         value |> codec.encode
       priority =
-        ref |> Ref.getPriority
+        ref.priority
       location =
         ref.location
   in result

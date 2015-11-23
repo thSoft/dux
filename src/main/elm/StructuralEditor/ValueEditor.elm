@@ -54,7 +54,7 @@ comboboxContext model =
       model.combobox.inputText
       |> model.kind.stringConverter.fromString
       |> List.concatMap (\value ->
-        if ((model.ref |> Ref.getModel) /= Ok value) || (modified model) then
+        if (model.ref.model /= Ok value) || (modified model) then
           [
             {
               label =
@@ -76,8 +76,7 @@ comboboxContext model =
 
 getInputText : Model model -> String
 getInputText model =
-  model.ref
-  |> Ref.getModel
+  model.ref.model
   |> Result.toMaybe
   |> Maybe.map model.kind.stringConverter.toString
   |> Maybe.withDefault ""

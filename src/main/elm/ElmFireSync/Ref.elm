@@ -13,7 +13,8 @@ type alias Ref model =
   {
     location: Location,
     subscriptions: Dict EventType (Result ElmFire.Error Subscription),
-    state: State model
+    priority: Priority,
+    model: model
   }
 
 type alias EventType =
@@ -35,12 +36,6 @@ childMoved : EventType
 childMoved =
   "childMoved"
 
-type alias State model =
-  {
-    priority: Priority,
-    model: model
-  }
-
 type Action action =
   None |
   SubscriptionResult EventType (Result ElmFire.Error Subscription) |
@@ -57,13 +52,10 @@ init initialModel location address =
             location,
           subscriptions =
             Dict.empty,
-          state =
-            {
-              priority =
-                NoPriority,
-              model =
-                initialModel
-            }
+          priority =
+            NoPriority,
+          model =
+            initialModel
         }
       task =
         [
@@ -131,15 +123,11 @@ update kind address action ref =
     Event eventType snapshot ->
       let result =
             Component.returnAndRun
-              { ref | state <- updatedState }
+              { ref |
+                priority <- snapshot.priority,
+                model <- update.model
+              }
               update.task
-          updatedState =
-            {
-              priority =
-                snapshot.priority,
-              model =
-                update.model
-            }
           update =
             handler
               (address `Signal.forwardTo` CustomAction)
@@ -159,31 +147,19 @@ update kind address action ref =
           dummyHandler _ _ _ =
             Component.return model
           model =
-            ref |> getModel
+            ref.model
       in result
     CustomAction action ->
       let result =
             Component.returnAndRun
-              { ref | state <- updatedState }
+              { ref | model <- update.model }
               update.task
-          updatedState =
-            { oldState | model <- update.model }
-          oldState =
-            ref.state
           update =
             kind.customAction
               (address `Signal.forwardTo` CustomAction)
               action
-              (ref |> getModel)
+              (ref.model)
       in result
-
-getModel : Ref model -> model
-getModel ref =
-  ref.state.model
-
-getPriority : Ref model -> Priority
-getPriority ref =
-  ref.state.priority
 
 {-- Do not call!
 -}
