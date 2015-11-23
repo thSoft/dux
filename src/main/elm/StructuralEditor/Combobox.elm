@@ -60,8 +60,8 @@ type Action =
   SetMenuVisible Bool |
   Submit Command
 
-update : Context -> Action -> Model -> Update Model
-update context action model =
+update : Action -> Model -> Update Model
+update action model =
   case action of
     None ->
       Component.return model

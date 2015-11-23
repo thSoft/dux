@@ -120,7 +120,7 @@ update address action model =
               }
               inserterUpdate.task
           inserterUpdate =
-            model.inserter |> Combobox.update (inserterContext model) inserterAction
+            model.inserter |> Combobox.update inserterAction
       in result
 
 editorItemHandler : EditorKind model -> ItemHandler (ValueEditor.Model model) (ValueEditor.Action action)

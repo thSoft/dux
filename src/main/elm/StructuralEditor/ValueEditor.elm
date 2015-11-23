@@ -123,7 +123,6 @@ update address action model =
               updateCombobox.task
           updateCombobox =
             Combobox.update
-              (comboboxContext model)
               comboboxAction
               model.combobox
       in result
