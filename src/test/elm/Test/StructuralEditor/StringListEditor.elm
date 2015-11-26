@@ -6,34 +6,35 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import ElmFire exposing (Location)
 import Component exposing (Output)
-import StructuralEditor.ListEditor as ListEditor
-import StructuralEditor.EditorKind as EditorKind
-import StructuralEditor.Separator as Separator exposing (Separator)
+import StructuralEditor.ListEditor as ListEditor exposing (ListEditor)
+import StructuralEditor.ValueEditor as ValueEditor exposing (ValueEditor)
+import StructuralEditor.Separators as Separators
+import StructuralEditor.ValueEditorContexts as ValueEditorContexts
 
 main : Signal Html
 main =
-  output.html
+  output.html |> Signal.map wrap
 
 port tasks : Signal (Task () ())
 port tasks =
   output.tasks
 
-type alias Element =
-  String
-
 type alias Model =
-  ListEditor.Model Element
+  ListEditor Element
+
+type alias Element =
+  ValueEditor.Model String
 
 output : Output Model
 output =
   Component.start
     {
       init =
-        ListEditor.init EditorKind.string location,
+        ListEditor.init context location,
       update =
-        ListEditor.update,
-      view address model =
-        ListEditor.view separator address model |> wrap,
+        ListEditor.update context,
+      view =
+        ListEditor.view context,
       inputs =
         []
     }
@@ -42,9 +43,18 @@ location : Location
 location =
   "https://thsoft.firebaseio.com/DUX/test/StringListEditor" |> ElmFire.fromUrl
 
-separator : Separator
-separator =
-  Separator.line
+context : ListEditor.Context Element ValueEditor.Action
+context =
+  {
+    initialItem =
+      ValueEditor.initialModel,
+    itemUpdateContext =
+      ValueEditor.updateContext ValueEditorContexts.string,
+    separator =
+      Separators.line,
+    itemViewContext =
+      ValueEditor.viewContext ValueEditorContexts.string
+  }
 
 wrap : Html -> Html
 wrap html =
@@ -52,7 +62,8 @@ wrap html =
     [
       Attributes.style [
         ("font-family", fontFamily ++ ", Helvetica, sans-serif"),
-        ("font-size", "90%")
+        ("font-size", "90%"),
+        ("padding", "0.36em")
       ]
     ]
     [

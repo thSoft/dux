@@ -1,14 +1,8 @@
-module StructuralEditor.Separator where
+module StructuralEditor.Separators where
 
-import Keyboard exposing (KeyCode)
 import Html exposing (Html)
 import Html.Attributes as Attributes
-
-type alias Separator =
-  {
-    html: Html,
-    keyCode: KeyCode
-  }
+import StructuralEditor.ListEditor exposing (Separator)
 
 comma : Separator
 comma =

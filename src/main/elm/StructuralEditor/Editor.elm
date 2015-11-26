@@ -1,5 +1,6 @@
-module ElmFireSync.Ref where
+module StructuralEditor.Editor where
 
+import Html exposing (Html)
 import Debug
 import Dict exposing (Dict)
 import Signal exposing (Address)
@@ -9,7 +10,7 @@ import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), Err
 import TaskUtil
 import Component exposing (Update)
 
-type alias Ref model =
+type alias Editor model =
   {
     location: Location,
     subscriptions: Dict EventType (Result ElmFire.Error Subscription),
@@ -37,12 +38,11 @@ childMoved =
   "childMoved"
 
 type Action action =
-  None |
   SubscriptionResult EventType (Result ElmFire.Error Subscription) |
   Event EventType Snapshot |
   CustomAction action
 
-init : model -> Location -> Address (Action action) -> Update (Ref model)
+init : model -> Location -> Address (Action action) -> Update (Editor model)
 init initialModel location address =
   let result =
         Component.returnAndRun model task
@@ -95,7 +95,7 @@ init initialModel location address =
         |> TaskUtil.onError (TaskUtil.notify address (Err >> (SubscriptionResult eventType)))
   in result
 
-type alias Kind model action =
+type alias UpdateContext model action =
   {
     valueChanged: EventHandler model action,
     childAdded: EventHandler model action,
@@ -109,21 +109,19 @@ type alias EventHandler model action =
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : Kind model action -> Address (Action action) -> Action action -> Ref model -> Update (Ref model)
-update kind address action ref =
+update : UpdateContext model action -> Address (Action action) -> Action action -> Editor model -> Update (Editor model)
+update context address action editor =
   case action of
-    None ->
-      Component.return ref
     SubscriptionResult eventType subscriptionResult ->
       Component.return
-        { ref |
+        { editor |
           subscriptions <-
-            ref.subscriptions |> Dict.insert eventType subscriptionResult
+            editor.subscriptions |> Dict.insert eventType subscriptionResult
         }
     Event eventType snapshot ->
       let result =
             Component.returnAndRun
-              { ref |
+              { editor |
                 priority <- snapshot.priority,
                 model <- update.model
               }
@@ -135,43 +133,39 @@ update kind address action ref =
               model
           handler =
             if eventType == valueChanged then
-                kind.valueChanged
+                context.valueChanged
             else if eventType == childAdded then
-                kind.childAdded
+                context.childAdded
             else if eventType == childRemoved then
-                kind.childRemoved
+                context.childRemoved
             else if eventType == childMoved then
-                kind.childMoved
+                context.childMoved
             else
                 dummyHandler |> Debug.log "unhandled event type"
           dummyHandler _ _ _ =
             Component.return model
           model =
-            ref.model
+            editor.model
       in result
     CustomAction action ->
       let result =
             Component.returnAndRun
-              { ref | model <- update.model }
+              { editor | model <- update.model }
               update.task
           update =
-            kind.customAction
+            context.customAction
               (address `Signal.forwardTo` CustomAction)
               action
-              (ref.model)
+              editor.model
       in result
 
-{-- Do not call!
--}
-unsubscribe : Ref model -> Task ElmFire.Error ()
-unsubscribe ref =
-  ref.subscriptions
-  |> Dict.values
-  |> List.map (\result ->
-    result
-    |> Result.toMaybe
-    |> Maybe.map ElmFire.unsubscribe
-    |> Maybe.withDefault (Task.succeed ())
-  )
-  |> Task.Extra.parallel
-  |> Task.map (always ())
+type alias ViewContext model action =
+  {
+    view: Address action -> Editor model -> Html
+  }
+
+view : ViewContext model action -> Address (Action action) -> Editor model -> Html
+view context address editor =
+  context.view
+    (address `Signal.forwardTo` CustomAction)
+    editor

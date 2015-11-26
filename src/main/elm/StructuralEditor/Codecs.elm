@@ -1,13 +1,8 @@
-module ElmFireSync.Codec where
+module StructuralEditor.Codecs where
 
 import Json.Decode as Decode exposing (Value, Decoder)
 import Json.Encode as Encode
-
-type alias Codec a =
-  {
-    decoder: Decoder a,
-    encode: a -> Value
-  }
+import StructuralEditor.ValueEditor exposing (Codec)
 
 string : Codec String
 string =

@@ -1,67 +1,155 @@
 module StructuralEditor.ValueEditor where
 
+import Task exposing (Task)
 import Signal exposing (Address)
+import Json.Decode as Decode exposing (Value, Decoder)
 import Html exposing (Html)
 import Html.Attributes as Attributes
-import Component exposing (Update)
 import TaskUtil
-import ElmFire exposing (Location)
-import ElmFireSync.Ref as Ref
-import ElmFireSync.ValueRef as ValueRef exposing (ValueRef)
+import ElmFire exposing (Reference, Location)
+import Component exposing (Update)
+import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.Combobox as Combobox
-import StructuralEditor.EditorKind exposing (EditorKind)
 import StructuralEditor.Styles as Styles
 
-type alias Model model =
+type alias ValueEditor data =
+  Editor (Model data)
+
+type alias Model data =
   {
-    kind: EditorKind model,
-    ref: ValueRef model,
+    data: Result NoData data,
     combobox: Combobox.Model
   }
 
-type Action action =
-  None |
-  RefAction (Ref.Action action) |
+type NoData =
+  Loading |
+  DecodingFailed String
+
+type Action =
   ComboboxAction Combobox.Action
 
-init : EditorKind model -> Location -> Address (Action action) -> Update (Model model)
-init kind location address =
-  let result =
-        Component.returnAndRun
-          {
-            kind =
-              kind,
-            ref =
-              initRef.model,
-            combobox =
-              initCombobox
-          }
-          initRef.task
-      initRef =
-        ValueRef.init
-          location
-          (address `Signal.forwardTo` RefAction)
-      initCombobox =
-        Combobox.init ""
-  in result
+init : Location -> Address (Editor.Action Action) -> Update (ValueEditor data)
+init location address =
+  Editor.init initialModel location address
 
-comboboxContext : Model model -> Combobox.Context
-comboboxContext model =
+initialModel : Model data
+initialModel =
+  {
+    data =
+      Err Loading,
+    combobox =
+      Combobox.init ""
+  }
+
+type alias Context data =
+  {
+    codec: Codec data,
+    stringConverter: StringConverter data
+  }
+
+type alias Codec a =
+  {
+    decoder: Decoder a,
+    encode: a -> Value
+  }
+
+type alias StringConverter a =
+  {
+    toString: a -> String,
+    fromString: String -> List a
+  }
+
+update : Context data -> Address (Editor.Action Action) -> Editor.Action Action -> ValueEditor data -> Update (ValueEditor data)
+update context address action model =
+  Editor.update (updateContext context) address action model
+
+updateContext : Context data -> Editor.UpdateContext (Model data) Action
+updateContext context =
+  {
+    valueChanged _ snapshot model =
+      let result =
+            Component.return
+              { model |
+                data <-
+                  data,
+                combobox <-
+                  Combobox.update comboboxAction model.combobox
+                  |> .model
+              }
+          data =
+            snapshot.value
+            |> Decode.decodeValue context.codec.decoder
+            |> Result.formatError DecodingFailed
+          comboboxAction =
+            data
+            |> Result.toMaybe
+            |> Maybe.map (\value ->
+              value |> context.stringConverter.toString |> Combobox.SetInputText
+            )
+            |> Maybe.withDefault Combobox.None
+      in result,
+    childAdded _ _ model =
+      Component.return model,
+    childRemoved _ _ model =
+      Component.return model,
+    childMoved _ _ model =
+      Component.return model,
+    customAction _ action model =
+      case action of
+        ComboboxAction comboboxAction ->
+          let result =
+                Component.returnAndRun
+                  { model | combobox <- updateCombobox.model }
+                  updateCombobox.task
+              updateCombobox =
+                Combobox.update
+                  comboboxAction
+                  model.combobox
+          in result
+  }
+
+view : Context data -> Address (Editor.Action Action) -> ValueEditor data -> Html
+view context address editor =
+  Editor.view (viewContext context) address editor
+
+viewContext : Context data -> Editor.ViewContext (Model data) Action
+viewContext context =
+  {
+    view address editor =
+      let result =
+            Html.div
+              [Attributes.style <| Styles.bordered borderColor]
+              [viewCombobox]
+          borderColor =
+            if editor.model |> modified context.stringConverter then
+              "red"
+            else
+              "gray"
+          viewCombobox = -- TODO distinguish error state with image
+            Combobox.view
+              (comboboxContext context editor)
+              (address `Signal.forwardTo` ComboboxAction)
+              editor.model.combobox
+      in result
+  }
+
+comboboxContext : Context data -> ValueEditor data -> Combobox.Context
+comboboxContext context editor =
   {
     inputText =
-      model |> getInputText,
+      editor.model |> getInputText context.stringConverter,
     commands =
-      model.combobox.inputText
-      |> model.kind.stringConverter.fromString
+      editor.model.combobox.inputText
+      |> context.stringConverter.fromString
       |> List.concatMap (\value ->
-        if (model.ref.model /= Ok value) || (modified model) then
+        if (editor.model.data /= Ok value) || (editor.model |> modified context.stringConverter) then
           [
             {
               label =
                 "Set to " ++ (value |> toString),
               task =
-                model.ref
-                |> ValueRef.set model.kind.codec value
+                editor
+                |> set context.codec value
                 |> TaskUtil.swallowError "ElmFire.set failed"
             }
           ]
@@ -74,74 +162,27 @@ comboboxContext model =
       []
   }
 
-getInputText : Model model -> String
-getInputText model =
-  model.ref.model
+getInputText : StringConverter data -> Model data -> String
+getInputText stringConverter model =
+  model.data
   |> Result.toMaybe
-  |> Maybe.map model.kind.stringConverter.toString
+  |> Maybe.map stringConverter.toString
   |> Maybe.withDefault ""
 
-modified : Model model -> Bool
-modified model =
-  (model |> getInputText) /= model.combobox.inputText
+modified : StringConverter data -> Model data -> Bool
+modified stringConverter model =
+  (model |> getInputText stringConverter) /= model.combobox.inputText
 
-update : Address (Action action) -> Action action -> Model model -> Update (Model model)
-update address action model =
-  case action of
-    None ->
-      Component.return model
-    RefAction refAction ->
-      let result =
-            Component.returnAndRun
-              { modelWithUpdatedRef | combobox <- updatedCombobox }
-              updateRef.task
-          updateRef =
-            ValueRef.update
-              model.kind.codec
-              (address `Signal.forwardTo` RefAction)
-              refAction
-              model.ref
-          modelWithUpdatedRef =
-            { model | ref <- updateRef.model }
-          updatedCombobox =
-            case refAction of
-              Ref.Event eventType _ ->
-                if eventType == Ref.valueChanged then
-                  { combobox | inputText <- modelWithUpdatedRef |> getInputText } -- XXX handle editing conflict
-                else
-                  combobox
-              _ ->
-                combobox
-          combobox =
-            model.combobox
-      in result
-    ComboboxAction comboboxAction ->
-      let result =
-            Component.returnAndRun
-              { model | combobox <- updateCombobox.model }
-              updateCombobox.task
-          updateCombobox =
-            Combobox.update
-              comboboxAction
-              model.combobox
-      in result
+-- Misc
 
-view : Address (Action action) -> Model model -> Html
-view address model =
+set : Codec data -> data -> ValueEditor data -> Task ElmFire.Error Reference
+set codec value editor =
   let result =
-        Html.div
-          [
-            Attributes.style <| Styles.bordered borderColor
-          ]
-          [viewCombobox]
-      borderColor =
-        if modified model then
-          "red"
-        else
-          "gray"
-      viewCombobox = -- TODO distinguish error state with image
-        Combobox.view
-          (comboboxContext model)
-          (address `Signal.forwardTo` ComboboxAction)
-          model.combobox
+        ElmFire.setWithPriority json priority location -- ElmFire.set would clear priority
+      json =
+        value |> codec.encode
+      priority =
+        editor.priority
+      location =
+        editor.location
   in result

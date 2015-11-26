@@ -1,12 +1,7 @@
-module StructuralEditor.StringConverter where
+module StructuralEditor.StringConverters where
 
 import String
-
-type alias StringConverter a =
-  {
-    toString: a -> String,
-    fromString: String -> List a
-  }
+import StructuralEditor.ValueEditor exposing (StringConverter)
 
 string : StringConverter String
 string =

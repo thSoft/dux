@@ -6,10 +6,9 @@ import Html exposing (Html)
 import Json.Decode as Decode
 import ElmFire exposing (Location)
 import Component exposing (Component, Output)
-import ElmFireSync.Codec as Codec exposing (Codec)
-import StructuralEditor.EditorKind as EditorKind exposing (EditorKind)
-import StructuralEditor.StringConverter as StringConverter exposing (StringConverter)
-import StructuralEditor.ValueEditor as ValueEditor
+import StructuralEditor.Codecs as Codecs
+import StructuralEditor.StringConverters as StringConverters
+import StructuralEditor.ValueEditor as ValueEditor exposing (ValueEditor)
 
 main : Signal Html
 main =
@@ -19,24 +18,24 @@ port tasks : Signal (Task () ())
 port tasks =
   output.tasks
 
+type alias Model =
+  ValueEditor Element
+
 type Element =
   String String |
   Number Float |
   Boolean Bool
-
-type alias Model =
-  ValueEditor.Model Element
 
 output : Output Model
 output =
   Component.start
     {
       init =
-        ValueEditor.init editorKind location,
+        ValueEditor.init location,
       update =
-        ValueEditor.update,
+        ValueEditor.update context,
       view =
-        ValueEditor.view,
+        ValueEditor.view context,
       inputs =
         []
     }
@@ -45,39 +44,39 @@ location : Location
 location =
   "https://thsoft.firebaseio.com/DUX/test/ChoiceEditor" |> ElmFire.fromUrl
 
-editorKind : EditorKind Element
-editorKind =
+context : ValueEditor.Context Element
+context =
   {
     codec =
       {
         decoder =
           Decode.oneOf [
-            Codec.string |> .decoder |> Decode.map String,
-            Codec.float |> .decoder |> Decode.map Number,
-            Codec.bool |> .decoder |> Decode.map Boolean
+            Codecs.string |> .decoder |> Decode.map String,
+            Codecs.float |> .decoder |> Decode.map Number,
+            Codecs.bool |> .decoder |> Decode.map Boolean
           ],
         encode a =
           case a of
             String string ->
-              (Codec.string |> .encode) string
+              (Codecs.string |> .encode) string
             Number float ->
-              (Codec.float |> .encode) float
+              (Codecs.float |> .encode) float
             Boolean bool ->
-              (Codec.bool |> .encode) bool
+              (Codecs.bool |> .encode) bool
       },
     stringConverter =
       {
         toString a =
           case a of
             String string ->
-              (StringConverter.string |> .toString) string
+              (StringConverters.string |> .toString) string
             Number float ->
-              (StringConverter.float |> .toString) float
+              (StringConverters.float |> .toString) float
             Boolean bool ->
-              (StringConverter.bool |> .toString) bool,
+              (StringConverters.bool |> .toString) bool,
         fromString string =
-          ((StringConverter.string |> .fromString) string |> List.map String) ++
-          ((StringConverter.float |> .fromString) string |> List.map Number) ++
-          ((StringConverter.bool |> .fromString) string |> List.map Boolean)
+          ((StringConverters.string |> .fromString) string |> List.map String) ++
+          ((StringConverters.float |> .fromString) string |> List.map Number) ++
+          ((StringConverters.bool |> .fromString) string |> List.map Boolean)
       }
   }
