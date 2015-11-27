@@ -1,4 +1,4 @@
-module Test.StructuralEditor.StringListEditor where
+module Test.StructuralEditor.ListEditor where
 
 import Signal exposing (Mailbox)
 import Task exposing (Task)
@@ -41,7 +41,7 @@ output =
 
 location : Location
 location =
-  "https://thsoft.firebaseio.com/DUX/test/StringListEditor" |> ElmFire.fromUrl
+  "https://thsoft.firebaseio.com/DUX/test/ListEditor" |> ElmFire.fromUrl
 
 context : ListEditor.Context Element ValueEditor.Action
 context =
