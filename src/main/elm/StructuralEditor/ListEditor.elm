@@ -4,18 +4,24 @@ import Array
 import Random
 import Dict exposing (Dict)
 import Signal exposing (Address)
+import Json.Encode as Encode
 import Task exposing (Task)
-import Task.Extra
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Keyboard exposing (KeyCode)
+import Task.Extra
 import Keyboard.Keys exposing (..)
 import ElmFire exposing (Priority(..), Location)
 import Component exposing (Update)
 import TaskUtil
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.Combobox as Combobox
+
+-- TODO fix lost focus when deleting last item
+-- TODO move to next/previous element when pressing enter or right/left
+-- TODO implement move
+-- TODO implement priority fixing
 
 type alias ListEditor item =
   Editor (Model item)
@@ -24,7 +30,7 @@ type alias Model item =
   {
     items: Dict String (Item item),
     inserter: Editor item,
-    inserterPosition: Maybe Position
+    lastInserted: Maybe Priority
   }
 
 type alias Item item =
@@ -33,19 +39,19 @@ type alias Item item =
     editor: Editor item
   }
 
-type Position =
-  Before String |
-  After String
-
 type Action action =
   None |
   ItemAction {
     url: String,
     action: Editor.Action action
   } |
+  Insert Position |
   Delete String |
-  InserterAction (Editor.Action action) |
-  SetInserterPosition (Maybe Position)
+  InserterAction (Editor.Action action)
+
+type Position =
+  Before String |
+  After String
 
 getItemAction : String -> Editor.Action action -> Action action
 getItemAction url action =
@@ -78,7 +84,7 @@ initialModel context location itemAddress =
         (location |> ElmFire.push)
         itemAddress
       |> .model,
-    inserterPosition =
+    lastInserted =
       Nothing
   }
 
@@ -97,11 +103,11 @@ type alias Separator =
   }
 
 update : Context item action -> Address (Editor.Action (Action action)) -> Editor.Action (Action action) -> ListEditor item -> Update (ListEditor item)
-update context address action model =
-  Editor.update (updateContext context) address action model
+update context address action editor =
+  Editor.update (updateContext context editor.location) address action editor
 
-updateContext : Context item action -> Editor.UpdateContext (Model item) (Action action)
-updateContext context =
+updateContext : Context item action -> Location -> Editor.UpdateContext (Model item) (Action action)
+updateContext context location =
   {
     valueChanged _ _ model =
       Component.return model,
@@ -183,27 +189,32 @@ updateContext context =
               |> ElmFire.remove
               |> TaskUtil.swallowError "Failed to delete item"
             )
+        Insert position ->
+          let result =
+                Component.returnAndRun
+                  { model | lastInserted <- Just priority }
+                  (
+                    location
+                    |> ElmFire.push
+                    |> ElmFire.setWithPriority (Encode.string "") priority
+                    |> TaskUtil.swallowError "Failed to insert item"
+                  )
+              priority =
+                position |> getPriority model
+          in result
         InserterAction inserterAction ->
           let result =
                 Component.returnAndRun
-                  { model |
-                    inserter <-
-                      inserterUpdate.model,
-                    inserterPosition <-
-                      model.inserterPosition -- TODO Nothing if saved
-                  }
+                  { model | inserter <- inserterUpdate.model }
                   inserterUpdate.task
               inserterUpdate =
-                { inserter | priority <- inserterPriority model }
+                { inserter | priority <- NumberPriority 0 }
                 |> Editor.update context.itemUpdateContext inserterAddress inserterAction
               inserter =
                 model.inserter
               inserterAddress =
                 listAddress `Signal.forwardTo` InserterAction
           in result
-        SetInserterPosition inserterPosition ->
-          Component.return
-            { model | inserterPosition <- inserterPosition }
   }
 
 unsubscribe : Editor model -> Task ElmFire.Error ()
@@ -219,48 +230,46 @@ unsubscribe editor =
   |> Task.Extra.parallel
   |> Task.map (always ())
 
-inserterPriority : Model item -> Priority
-inserterPriority model =
-  model.inserterPosition |> Maybe.map (\inserterPosition ->
-    let result =
-          ((getPriorityAt indexBefore) + (getPriorityAt indexAfter)) / 2 |> NumberPriority
-        getPriorityAt index =
-          items |> Array.fromList |> Array.get index |> Maybe.map (\(_, item) ->
-            case item.priority of
-              NumberPriority priority ->
-                priority
-              _ ->
-                0.0
-          ) |> Maybe.withDefault ((if index < 0 then Random.minInt else Random.maxInt) |> toFloat)
-        indicesByUrl =
-          items |> List.indexedMap (\index (url, _) ->
-            (url, index)
-          ) |> Dict.fromList
-        items =
-          model |> get
-        indexBefore =
-          case inserterPosition of
-            After urlBefore ->
-              indicesByUrl |> Dict.get urlBefore |> Maybe.withDefault Random.minInt
-            Before urlAfter ->
-              indicesByUrl |> Dict.get urlAfter |> Maybe.map (\otherIndex -> otherIndex - 1) |> Maybe.withDefault Random.minInt
-        indexAfter =
-          case inserterPosition of
-            Before urlAfter ->
-              indicesByUrl |> Dict.get urlAfter |> Maybe.withDefault Random.maxInt
-            After urlBefore ->
-              indicesByUrl |> Dict.get urlBefore |> Maybe.map (\otherIndex -> otherIndex + 1) |> Maybe.withDefault Random.maxInt
-    in result
-  ) |> Maybe.withDefault (0.0 |> NumberPriority)
+getPriority : Model item -> Position -> Priority
+getPriority model position =
+  let result =
+        ((getPriorityAt indexBefore) + (getPriorityAt indexAfter)) / 2 |> NumberPriority
+      getPriorityAt index =
+        items |> Array.fromList |> Array.get index |> Maybe.map (\(_, item) ->
+          case item.priority of
+            NumberPriority priority ->
+              priority
+            _ ->
+              0.0
+        ) |> Maybe.withDefault ((if index < 0 then Random.minInt else Random.maxInt) |> toFloat)
+      indicesByUrl =
+        items |> List.indexedMap (\index (url, _) ->
+          (url, index)
+        ) |> Dict.fromList
+      items =
+        model |> get
+      indexBefore =
+        case position of
+          After urlBefore ->
+            indicesByUrl |> Dict.get urlBefore |> Maybe.withDefault Random.minInt
+          Before urlAfter ->
+            indicesByUrl |> Dict.get urlAfter |> Maybe.map (\otherIndex -> otherIndex - 1) |> Maybe.withDefault Random.minInt
+      indexAfter =
+        case position of
+          Before urlAfter ->
+            indicesByUrl |> Dict.get urlAfter |> Maybe.withDefault Random.maxInt
+          After urlBefore ->
+            indicesByUrl |> Dict.get urlBefore |> Maybe.map (\otherIndex -> otherIndex + 1) |> Maybe.withDefault Random.maxInt
+  in result
 
-view : Context item action -> Address (Editor.Action (Action action)) -> ListEditor item -> Html
-view context address editor =
-  Editor.view (viewContext context) address editor
+view : Bool -> Context item action -> Address (Editor.Action (Action action)) -> ListEditor item -> Html
+view focused context address editor =
+  Editor.view focused (viewContext context) address editor
 
 viewContext : Context item action -> Editor.ViewContext (Model item) (Action action)
 viewContext context =
   {
-    view listAddress editor =
+    view focused listAddress editor =
       let result =
             Html.div
               []
@@ -271,13 +280,11 @@ viewContext context =
             else
               items
               |> List.map (\(url, item) ->
-                maybeInserter (Before url)
-                ++ [
+                [
                   viewTransformer context.separator False listAddress editor url,
-                  Editor.view context.itemViewContext (itemAddress url) item.editor,
+                  Editor.view (editor.model.lastInserted == Just item.priority) context.itemViewContext (itemAddress url) item.editor,
                   viewTransformer context.separator True listAddress editor url
                 ]
-                ++ maybeInserter (After url)
               )
               |> List.intersperse [context.separator.html]
               |> List.concat
@@ -285,17 +292,12 @@ viewContext context =
             editor.model |> get
           itemAddress url =
             listAddress `Signal.forwardTo` (getItemAction url)
-          maybeInserter inserterPosition =
-            if editor.model.inserterPosition == Just inserterPosition then
-              [viewInserter context listAddress editor]
-            else
-              []
       in result
   }
 
 viewInserter : Context item action -> Address (Action action) -> ListEditor item -> Html
 viewInserter context listAddress editor =
-  Editor.view context.itemViewContext (listAddress `Signal.forwardTo` InserterAction) editor.model.inserter
+  Editor.view False context.itemViewContext (listAddress `Signal.forwardTo` InserterAction) editor.model.inserter
 
 viewTransformer : Separator -> Bool -> Address (Action action) -> ListEditor item -> String -> Html
 viewTransformer separator after address editor url =
@@ -309,26 +311,18 @@ viewTransformer separator after address editor url =
             Combobox.handleKeys True [removerKey.keyCode, tab.keyCode],
             Events.onKeyUp address keyUpAction
           ]
-          maybeSeparator
+          []
       keyUpAction keyCode =
         if keyCode == removerKey.keyCode then
           Delete url
         else if keyCode == separator.keyCode then
-          SetInserterPosition (Just inserterPosition)
-        else if keyCode == inserterHidingKey.keyCode then
-          SetInserterPosition Nothing
+          Insert (if after then After url else Before url)
         else
           None
       removerKey =
         if after then backspace else delete
-      inserterHidingKey =
-        if after then delete else backspace
       inserterPosition =
         if after then After url else Before url
-      maybeSeparator =
-        if (after && editor.model.inserterPosition == Just (After url)) || (not after && editor.model.inserterPosition == Just (Before url)) then
-          [separator.html]
-        else []
   in result
 
 {-- Returns the list of items along with their URLs ordered by priority.

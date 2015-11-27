@@ -1,6 +1,7 @@
 module StructuralEditor.Editor where
 
 import Html exposing (Html)
+import Html.Attributes as Attributes
 import Debug
 import Dict exposing (Dict)
 import Signal exposing (Address)
@@ -161,11 +162,19 @@ update context address action editor =
 
 type alias ViewContext model action =
   {
-    view: Address action -> Editor model -> Html
+    view: {-focused:-} Bool -> Address action -> Editor model -> Html
   }
 
-view : ViewContext model action -> Address (Action action) -> Editor model -> Html
-view context address editor =
+view : Bool -> ViewContext model action -> Address (Action action) -> Editor model -> Html
+view focused context address editor =
   context.view
+    focused
     (address `Signal.forwardTo` CustomAction)
     editor
+
+focusAttributes : Bool -> List Html.Attribute
+focusAttributes focused =
+  if focused then
+    [Attributes.attribute "data-autofocus" "true"]
+  else
+    []

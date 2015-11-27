@@ -67,10 +67,7 @@ update action model =
       Component.return model
     SetInputText inputText ->
       Component.return
-        { model |
-          inputText <- inputText,
-          menuVisible <- True
-        }
+        { model | inputText <- inputText }
     SetCommandIndex commandIndex ->
       Component.return (
         if model.menuVisible then
@@ -133,7 +130,7 @@ view context address model =
               else if key == pageUp.keyCode then
                 SetCommandIndex first
               else
-                None
+                SetMenuVisible True
             first =
               0
             last =
@@ -178,7 +175,8 @@ view context address model =
                   ("z-index", "1"),
                   ("display", "table"),
                   ("box-shadow", "0 2px 8px 1px rgba(0, 0, 0, 0.3)"),
-                  ("border-radius", "4px")
+                  ("border-radius", "4px"),
+                  ("background", "white")
                 ]
               ]
               commands
@@ -200,9 +198,7 @@ view context address model =
         )
       selectedStyle selected =
         if selected then
-          [
-            ("background", "linear-gradient(to bottom, #eeeeee, #dddddd)")
-          ]
+          [("background", "linear-gradient(to bottom, #eeeeee, #dddddd)")]
         else
           []
  in result

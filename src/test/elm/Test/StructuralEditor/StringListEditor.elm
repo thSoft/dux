@@ -9,7 +9,7 @@ import Component exposing (Output)
 import StructuralEditor.ListEditor as ListEditor exposing (ListEditor)
 import StructuralEditor.ValueEditor as ValueEditor exposing (ValueEditor)
 import StructuralEditor.Separators as Separators
-import StructuralEditor.ValueEditorContexts as ValueEditorContexts
+import Test.StructuralEditor.ChoiceEditor as ChoiceEditor
 
 main : Signal Html
 main =
@@ -23,7 +23,7 @@ type alias Model =
   ListEditor Element
 
 type alias Element =
-  ValueEditor.Model String
+  ValueEditor.Model ChoiceEditor.Element
 
 output : Output Model
 output =
@@ -34,7 +34,7 @@ output =
       update =
         ListEditor.update context,
       view =
-        ListEditor.view context,
+        ListEditor.view True context,
       inputs =
         []
     }
@@ -49,11 +49,11 @@ context =
     initialItem =
       ValueEditor.initialModel,
     itemUpdateContext =
-      ValueEditor.updateContext ValueEditorContexts.string,
+      ValueEditor.updateContext ChoiceEditor.context,
     separator =
       Separators.line,
     itemViewContext =
-      ValueEditor.viewContext ValueEditorContexts.string
+      ValueEditor.viewContext ChoiceEditor.context
   }
 
 wrap : Html -> Html
@@ -86,24 +86,35 @@ fontFamily =
 
 script : String
 script = """
-var observer = new MutationObserver(function(mutations) {
+var addedNodesObserver = new MutationObserver(function(mutations) {
   mutations.forEach(function(mutation) {
-    handleAutofocus(mutation.addedNodes);
+    handleChildrenAdded(mutation.addedNodes);
   });
 });
+var subtreeChangedConfig = { childList: true, subtree: true };
 var target = document.querySelector('body > div');
-var config = { childList: true, subtree: true };
-observer.observe(target, config);
+addedNodesObserver.observe(target, subtreeChangedConfig);
 
-function handleAutofocus(nodeList) {
+function handleChildrenAdded(nodeList) {
   for (var i = 0; i < nodeList.length; i++) {
     var node = nodeList[i];
-    if (node instanceof Element && node.hasAttribute('data-autofocus')) {
-      node.focus();
-      break;
-    } else {
-      handleAutofocus(node.childNodes);
-    }
+    handleAttributesChanged(node);
+    targetObserver.observe(node, attributesChangedConfig); // XXX necessary because of the following behavior of virtual-dom:
+    // inserting NodeToFocus before OtherNode happens by mutating OtherNode into NodeToFocus and inserting a new OtherNode after it
+    handleChildrenAdded(node.childNodes);
+  }
+}
+
+var targetObserver = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    handleAttributesChanged(mutation.target);
+  });
+});
+var attributesChangedConfig = { attributes: true };
+
+function handleAttributesChanged(node) {
+  if (node instanceof Element && node.hasAttribute('data-autofocus')) {
+    node.focus();
   }
 }
 """

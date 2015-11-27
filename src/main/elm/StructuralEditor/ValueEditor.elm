@@ -108,14 +108,14 @@ updateContext context =
           in result
   }
 
-view : Context data -> Address (Editor.Action Action) -> ValueEditor data -> Html
-view context address editor =
-  Editor.view (viewContext context) address editor
+view : Bool -> Context data -> Address (Editor.Action Action) -> ValueEditor data -> Html
+view focused context address editor =
+  Editor.view focused (viewContext context) address editor
 
 viewContext : Context data -> Editor.ViewContext (Model data) Action
 viewContext context =
   {
-    view address editor =
+    view focused address editor =
       let result =
             Html.div
               [Attributes.style <| Styles.bordered borderColor]
@@ -127,14 +127,14 @@ viewContext context =
               "gray"
           viewCombobox = -- TODO distinguish error state with image
             Combobox.view
-              (comboboxContext context editor)
+              (comboboxContext focused context editor)
               (address `Signal.forwardTo` ComboboxAction)
               editor.model.combobox
       in result
   }
 
-comboboxContext : Context data -> ValueEditor data -> Combobox.Context
-comboboxContext context editor =
+comboboxContext : Bool -> Context data -> ValueEditor data -> Combobox.Context
+comboboxContext focused context editor =
   {
     inputText =
       editor.model |> getInputText context.stringConverter,
@@ -159,7 +159,7 @@ comboboxContext context editor =
     style =
       Combobox.ContentEditable,
     extraAttributes =
-      []
+      Editor.focusAttributes focused
   }
 
 getInputText : StringConverter data -> Model data -> String
