@@ -1,12 +1,9 @@
 module StructuralEditor.Editor where
 
 import Html exposing (Html)
-import Html.Attributes as Attributes
 import Debug
 import Dict exposing (Dict)
 import Signal exposing (Address)
-import Task exposing (Task)
-import Task.Extra
 import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
 import TaskUtil
 import Component exposing (Update)
@@ -65,8 +62,7 @@ init initialModel location address =
           subscribe childRemoved ElmFire.childRemoved,
           subscribe childMoved ElmFire.childMoved
         ]
-        |> Task.Extra.parallel
-        |> Task.map (always ())
+        |> TaskUtil.parallel
       subscribe eventType query =
         location
         |> ElmFire.subscribe
@@ -96,21 +92,47 @@ init initialModel location address =
         |> TaskUtil.onError (TaskUtil.notify address (Err >> (SubscriptionResult eventType)))
   in result
 
-type alias UpdateContext model action =
+done : Editor model -> Component.HandledTask
+done editor =
+  editor.subscriptions
+  |> Dict.values
+  |> List.map Result.toMaybe
+  |> List.filterMap identity
+  |> List.map (\subscription ->
+    subscription |> ElmFire.unsubscribe |> TaskUtil.swallowError "ElmFire.unsubscribe failed"
+  )
+  |> TaskUtil.parallel
+
+type alias UpdateContext editor action = -- TODO
   {
-    valueChanged: EventHandler model action,
-    childAdded: EventHandler model action,
-    childRemoved: EventHandler model action,
-    childMoved: EventHandler model action,
-    customAction: Address action -> action -> model -> Update model
+    valueChanged: EventHandler editor action,
+    childAdded: EventHandler editor action,
+    childRemoved: EventHandler editor action,
+    childMoved: EventHandler editor action,
+    customAction: Address action -> action -> editor -> Update editor
   }
 
-type alias EventHandler model action =
-  Address action -> Snapshot -> model -> Update model
+type alias EventHandler editor action =
+  Address action -> Snapshot -> editor -> Update editor
+
+defaultUpdateContext : UpdateContext editor action
+defaultUpdateContext =
+  {
+    valueChanged _ _ editor =
+      Component.return editor,
+    childAdded _ _ editor =
+      Component.return editor,
+    childRemoved _ _ editor =
+      Component.return editor,
+    childMoved _ _ editor =
+      Component.return editor,
+    customAction _ _ editor =
+      Component.return editor
+  }
 
 {-- Do not call this with a concrete action, use only for propagation!
 -}
-update : UpdateContext model action -> Address (Action action) -> Action action -> Editor model -> Update (Editor model)
+update : UpdateContext (Editor model) action -> Address (Action action) -> Action action -> Editor model -> Update (Editor model)
 update context address action editor =
   case action of
     SubscriptionResult eventType subscriptionResult ->
@@ -122,16 +144,15 @@ update context address action editor =
     Event eventType snapshot ->
       let result =
             Component.returnAndRun
-              { editor |
-                priority <- snapshot.priority,
-                model <- update.model
-              }
+              { updatedEditor | priority <- snapshot.priority }
               update.task
+          updatedEditor =
+            update.model
           update =
             handler
               (address `Signal.forwardTo` CustomAction)
               snapshot
-              model
+              editor
           handler =
             if eventType == valueChanged then
                 context.valueChanged
@@ -144,37 +165,22 @@ update context address action editor =
             else
                 dummyHandler |> Debug.log "unhandled event type"
           dummyHandler _ _ _ =
-            Component.return model
-          model =
-            editor.model
+            Component.return editor
       in result
     CustomAction action ->
-      let result =
-            Component.returnAndRun
-              { editor | model <- update.model }
-              update.task
-          update =
-            context.customAction
-              (address `Signal.forwardTo` CustomAction)
-              action
-              editor.model
-      in result
+      context.customAction
+        (address `Signal.forwardTo` CustomAction)
+        action
+        editor
 
 type alias ViewContext model action =
   {
     view: {-focused:-} Bool -> Address action -> Editor model -> Html
   }
 
-view : Bool -> ViewContext model action -> Address (Action action) -> Editor model -> Html
-view focused context address editor =
+view : ViewContext model action -> Bool -> Address (Action action) -> Editor model -> Html
+view context focused address editor =
   context.view
     focused
     (address `Signal.forwardTo` CustomAction)
     editor
-
-focusAttributes : Bool -> List Html.Attribute
-focusAttributes focused =
-  if focused then
-    [Attributes.attribute "data-autofocus" "true"]
-  else
-    []

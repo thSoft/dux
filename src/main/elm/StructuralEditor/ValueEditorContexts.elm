@@ -4,6 +4,8 @@ import StructuralEditor.Codecs as Codecs
 import StructuralEditor.StringConverters as StringConverters
 import StructuralEditor.ValueEditor as ValueEditor
 
+-- TODO add description
+
 string : ValueEditor.Context String
 string =
   {

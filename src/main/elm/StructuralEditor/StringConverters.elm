@@ -23,7 +23,7 @@ int =
 
 toList : Result x a -> List a
 toList result =
-  result |> Result.toMaybe |> Maybe.map (\value -> [value]) |> Maybe.withDefault []
+  [result |> Result.toMaybe] |> List.filterMap identity
 
 float : StringConverter Float
 float =

@@ -60,22 +60,25 @@ type alias StringConverter a =
   }
 
 update : Context data -> Address (Editor.Action Action) -> Editor.Action Action -> ValueEditor data -> Update (ValueEditor data)
-update context address action model =
-  Editor.update (updateContext context) address action model
+update context address action editor =
+  Editor.update (updateContext context) address action editor
 
-updateContext : Context data -> Editor.UpdateContext (Model data) Action
+updateContext : Context data -> Editor.UpdateContext (ValueEditor data) Action
 updateContext context =
   {
-    valueChanged _ snapshot model =
+    valueChanged _ snapshot editor =
       let result =
             Component.return
+              { editor | model <- updatedModel }
+          updatedModel =
               { model |
                 data <-
                   data,
                 combobox <-
-                  Combobox.update comboboxAction model.combobox
-                  |> .model
+                  Combobox.update comboboxAction model.combobox |> .model
               }
+          model =
+            editor.model
           data =
             snapshot.value
             |> Decode.decodeValue context.codec.decoder
@@ -88,29 +91,33 @@ updateContext context =
             )
             |> Maybe.withDefault Combobox.None
       in result,
-    childAdded _ _ model =
-      Component.return model,
-    childRemoved _ _ model =
-      Component.return model,
-    childMoved _ _ model =
-      Component.return model,
-    customAction _ action model =
+    childAdded _ _ editor =
+      Component.return editor,
+    childRemoved _ _ editor =
+      Component.return editor,
+    childMoved _ _ editor =
+      Component.return editor,
+    customAction _ action editor =
       case action of
         ComboboxAction comboboxAction ->
           let result =
                 Component.returnAndRun
-                  { model | combobox <- updateCombobox.model }
+                  { editor | model <- updatedModel }
                   updateCombobox.task
               updateCombobox =
                 Combobox.update
                   comboboxAction
                   model.combobox
+              updatedModel =
+                { model | combobox <- updateCombobox.model }
+              model =
+                editor.model
           in result
   }
 
-view : Bool -> Context data -> Address (Editor.Action Action) -> ValueEditor data -> Html
-view focused context address editor =
-  Editor.view focused (viewContext context) address editor
+view : Context data -> Bool -> Address (Editor.Action Action) -> ValueEditor data -> Html
+view context focused address editor =
+  Editor.view (viewContext context) focused address editor
 
 viewContext : Context data -> Editor.ViewContext (Model data) Action
 viewContext context =
@@ -159,8 +166,15 @@ comboboxContext focused context editor =
     style =
       Combobox.ContentEditable,
     extraAttributes =
-      Editor.focusAttributes focused
+      focusAttributes focused
   }
+
+focusAttributes : Bool -> List Html.Attribute
+focusAttributes focused =
+  if focused then
+    [Attributes.attribute "data-autofocus" "true"]
+  else
+    []
 
 getInputText : StringConverter data -> Model data -> String
 getInputText stringConverter model =

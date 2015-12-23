@@ -34,7 +34,7 @@ output =
       update =
         ListEditor.update context,
       view =
-        ListEditor.view True context,
+        ListEditor.view context True,
       inputs =
         []
     }

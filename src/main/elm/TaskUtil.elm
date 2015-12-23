@@ -3,6 +3,7 @@ module TaskUtil where
 import Signal exposing (Address)
 import Task exposing (Task)
 import Debug
+import Task.Extra
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
 andThen =
@@ -19,6 +20,11 @@ swallowError errorMessage task =
   |> Task.mapError (Debug.log errorMessage)
   |> onError (always <| Task.succeed ())
 
+parallel : List (Task x a) -> Task x ()
+parallel tasks =
+  tasks
+  |> Task.Extra.parallel
+  |> Task.map (always ())
 
 {-| A convenience for a common pattern, where we want to take the result of
 a task and then send it to an address with a tag. For example, if you had

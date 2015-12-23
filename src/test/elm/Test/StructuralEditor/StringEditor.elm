@@ -31,7 +31,7 @@ output =
       update =
         ValueEditor.update context,
       view =
-        ValueEditor.view True context,
+        ValueEditor.view context True,
       inputs =
         []
     }
