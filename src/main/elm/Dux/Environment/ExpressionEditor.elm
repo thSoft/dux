@@ -27,7 +27,12 @@ type Action =
 init : Location -> Address (Editor.Action Action) -> Update (Editor Model)
 init location address =
   let result =
-        { initEditor | task <- initNumberLiteral.task }
+        { initEditor | task <- task }
+      task =
+        [
+          initNumberLiteral.task,
+          initEditor.task
+        ] |> TaskUtil.parallel
       initEditor =
         Editor.init (initNumberLiteral.model |> NumberLiteral) location address
       initNumberLiteral =
