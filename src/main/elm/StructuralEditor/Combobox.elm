@@ -1,6 +1,6 @@
 module StructuralEditor.Combobox where
 
-import Keyboard exposing (KeyCode)
+import Char exposing (KeyCode)
 import Array
 import String
 import Signal exposing (Address, Message)
@@ -67,20 +67,20 @@ update action model =
       Component.return model
     SetInputText inputText ->
       Component.return
-        { model | inputText <- inputText }
+        { model | inputText = inputText }
     SetCommandIndex commandIndex ->
       Component.return (
         if model.menuVisible then
-          { model | commandIndex <- commandIndex }
+          { model | commandIndex = commandIndex }
         else
-          { model | menuVisible <- True }
+          { model | menuVisible = True }
       )
     SetMenuVisible menuVisible ->
       Component.return
-        { model | menuVisible <- menuVisible }
+        { model | menuVisible = menuVisible }
     Submit command ->
       Component.returnAndRun
-        { model | menuVisible <- False }
+        { model | menuVisible = False }
         command.task
 
 view : Context -> Address Action -> Model -> Html

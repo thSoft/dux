@@ -55,7 +55,7 @@ context =
             Codecs.float |> .decoder |> Decode.map Number,
             Codecs.bool |> .decoder |> Decode.map Boolean
           ],
-        encode a =
+        encode = \a ->
           case a of
             String string ->
               (Codecs.string |> .encode) string
@@ -66,7 +66,7 @@ context =
       },
     stringConverter =
       {
-        toString a =
+        toString = \a ->
           case a of
             String string ->
               (StringConverters.string |> .toString) string
@@ -74,7 +74,7 @@ context =
               (StringConverters.float |> .toString) float
             Boolean bool ->
               (StringConverters.bool |> .toString) bool,
-        fromString string =
+        fromString = \string ->
           ((StringConverters.string |> .fromString) string |> List.map String) ++
           ((StringConverters.float |> .fromString) string |> List.map Number) ++
           ((StringConverters.bool |> .fromString) string |> List.map Boolean)

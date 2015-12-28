@@ -8,7 +8,7 @@ string =
   {
     toString =
       identity,
-    fromString string =
+    fromString = \string ->
       [string]
   }
 
@@ -17,7 +17,7 @@ int =
   {
     toString =
       toString,
-    fromString string =
+    fromString = \string ->
       string |> String.toInt |> toList
   }
 
@@ -30,7 +30,7 @@ float =
   {
     toString =
       toString,
-    fromString string =
+    fromString = \string ->
       string |> String.toFloat |> toList
   }
 
@@ -39,7 +39,7 @@ bool =
   {
     toString =
       toString,
-    fromString string =
+    fromString = \string ->
       if string |> String.isEmpty then
         []
       else if "true" |> startsWithIgnoringCase string then

@@ -7,7 +7,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import ElmFire exposing (Location)
 import DecodeUtil
-import Component exposing (Update)
+import Component exposing (Component, Update)
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.ValueEditor as ValueEditor exposing (ValueEditor)
 
@@ -26,6 +26,19 @@ type Data =
 
 type alias Action =
   ValueEditor.Action
+
+component : Location -> Component FunctionTypeEditor (Editor.Action Action)
+component location =
+  {
+    init =
+      init location,
+    update =
+      update,
+    view =
+      view True,
+    inputs =
+      []
+  }
 
 init : Location -> Address (Editor.Action Action) -> Update (Editor Model)
 init location address =
@@ -46,14 +59,14 @@ context =
       {
         decoder =
           Decode.string |> Decode.map (findType >> Maybe.withDefault Unknown),
-        encode a =
+        encode = \a ->
           findTypeName a |> Encode.string
       },
     stringConverter =
       {
-        toString a =
+        toString = \a ->
           findTypeName a,
-        fromString string =
+        fromString = \string ->
           [string |> findType] |> List.filterMap identity
       }
   }

@@ -20,17 +20,7 @@ type alias Model =
 
 output : Output Model
 output =
-  Component.start
-    {
-      init =
-        FunctionTypeEditor.init location,
-      update =
-        FunctionTypeEditor.update,
-      view =
-        FunctionTypeEditor.view True,
-      inputs =
-        []
-    }
+  FunctionTypeEditor.component location |> Component.start
 
 location : Location
 location =

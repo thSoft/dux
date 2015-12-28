@@ -16,25 +16,12 @@ port tasks : Signal (Task () ())
 port tasks =
   output.tasks
 
-type alias Model =
-  ValueEditor Element
-
 type alias Element =
   String
 
-output : Output Model
+output : Output (ValueEditor Element)
 output =
-  Component.start
-    {
-      init =
-        ValueEditor.init location,
-      update =
-        ValueEditor.update context,
-      view =
-        ValueEditor.view context True,
-      inputs =
-        []
-    }
+  ValueEditor.component context location |> Component.start
 
 location : Location
 location =

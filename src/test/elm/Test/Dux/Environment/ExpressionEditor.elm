@@ -15,22 +15,9 @@ port tasks : Signal (Task () ())
 port tasks =
   output.tasks
 
-type alias Model =
-  ExpressionEditor
-
-output : Output Model
+output : Output ExpressionEditor
 output =
-  Component.start
-    {
-      init =
-        ExpressionEditor.init location,
-      update =
-        ExpressionEditor.update,
-      view =
-        ExpressionEditor.view True,
-      inputs =
-        []
-    }
+  ExpressionEditor.component location |> Component.start
 
 location : Location
 location =

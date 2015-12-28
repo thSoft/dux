@@ -9,10 +9,10 @@ import Task exposing (Task)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
-import Keyboard exposing (KeyCode)
+import Char exposing (KeyCode)
 import Keyboard.Keys exposing (..)
 import ElmFire exposing (Priority(..), Location)
-import Component exposing (Update)
+import Component exposing (Component, Update)
 import TaskUtil
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.Combobox as Combobox
@@ -59,6 +59,19 @@ getItemAction url action =
       url,
     action =
       action
+  }
+
+component : Context item action -> Location -> Component (ListEditor item) (Editor.Action (Action action))
+component context location =
+  {
+    init =
+      init context location,
+    update =
+      update context,
+    view =
+      view context True,
+    inputs =
+      []
   }
 
 init : Context item action -> Location -> Address (Editor.Action (Action action)) -> Update (ListEditor item)
@@ -108,15 +121,15 @@ update context address action editor =
 updateContext : Context item action -> Location -> Editor.UpdateContext (ListEditor item) (Action action)
 updateContext context location =
   {
-    valueChanged _ _ editor =
+    valueChanged = \_ _ editor ->
       Component.return editor,
-    childAdded listAddress snapshot editor =
+    childAdded = \listAddress snapshot editor ->
       let result =
             Component.returnAndRun
-              { editor | model <- updatedModel }
+              { editor | model = updatedModel }
               itemUpdate.task
           updatedModel =
-            { model | items <- model.items |> Dict.insert url item }
+            { model | items = model.items |> Dict.insert url item }
           model =
             editor.model
           url =
@@ -136,15 +149,15 @@ updateContext context location =
           itemAddress =
             listAddress `Signal.forwardTo` (getItemAction url)
       in result,
-    childRemoved listAddress snapshot editor =
+    childRemoved = \listAddress snapshot editor ->
       let result =
             editor.model.items |> Dict.get url |> Maybe.map (\item ->
               Component.returnAndRun
-                { editor | model <- updatedModel }
+                { editor | model = updatedModel }
                 (item.editor |> unsubscribe |> TaskUtil.swallowError "ElmFire.unsubscribe failed")
             ) |> Maybe.withDefault (Component.return editor)
           updatedModel =
-            { model | items <- model.items |> Dict.remove url }
+            { model | items = model.items |> Dict.remove url }
           model =
             editor.model
           url =
@@ -152,14 +165,14 @@ updateContext context location =
           itemAddress =
             listAddress `Signal.forwardTo` (getItemAction url)
       in result,
-    childMoved _ snapshot editor =
+    childMoved = \_ snapshot editor ->
       let result =
             Component.return
-              { editor | model <- updatedModel }
+              { editor | model = updatedModel }
           updatedModel =
-            { model | items <-
+            { model | items =
               model.items |> Dict.update url (Maybe.map (\item ->
-                { item | priority <- snapshot.priority }
+                { item | priority = snapshot.priority }
               ))
             }
           model =
@@ -167,7 +180,7 @@ updateContext context location =
           url =
             snapshot.reference |> ElmFire.toUrl
       in result,
-    customAction listAddress action editor =
+    customAction = \listAddress action editor ->
       case action of
         None ->
           Component.return editor
@@ -175,16 +188,16 @@ updateContext context location =
           editor.model.items |> Dict.get itemAction.url |> Maybe.map (\item ->
             let result =
                   Component.returnAndRun
-                    { editor | model <- updatedModel }
+                    { editor | model = updatedModel }
                     itemUpdate.task
                 updatedModel =
-                  { model | items <- updatedItems }
+                  { model | items = updatedItems }
                 model =
                   editor.model
                 updatedItems =
                   model.items |> Dict.insert itemAction.url updatedItem
                 updatedItem =
-                  { item | editor <- itemUpdate.model }
+                  { item | editor = itemUpdate.model }
                 itemUpdate =
                   Editor.update
                     context.itemUpdateContext
@@ -207,7 +220,7 @@ updateContext context location =
         Insert position ->
           let result =
                 Component.returnAndRun
-                  { editor | model <- updatedModel }
+                  { editor | model = updatedModel }
                   task
               task =
                 location
@@ -215,7 +228,7 @@ updateContext context location =
                 |> ElmFire.setWithPriority (Encode.string "") priority
                 |> TaskUtil.swallowError "Failed to insert item"
               updatedModel =
-                { model | lastInserted <- Just priority }
+                { model | lastInserted = Just priority }
               model =
                 editor.model
               priority =
@@ -224,14 +237,14 @@ updateContext context location =
         InserterAction inserterAction ->
           let result =
                 Component.returnAndRun
-                  { editor | model <- updatedModel }
+                  { editor | model = updatedModel }
                   inserterUpdate.task
               updatedModel =
-                  { model | inserter <- inserterUpdate.model }
+                  { model | inserter = inserterUpdate.model }
               model =
                 editor.model
               inserterUpdate =
-                { inserter | priority <- NumberPriority 0 }
+                { inserter | priority = NumberPriority 0 }
                 |> Editor.update context.itemUpdateContext inserterAddress inserterAction
               inserter =
                 model.inserter
@@ -291,7 +304,7 @@ view context focused address editor =
 viewContext : Context item action -> Editor.ViewContext (Model item) (Action action)
 viewContext context =
   {
-    view focused listAddress editor =
+    view = \focused listAddress editor ->
       let result =
             Html.div
               []

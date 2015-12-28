@@ -6,7 +6,7 @@ import Json.Decode as Decode exposing ((:=))
 import ElmFire exposing (Location)
 import DecodeUtil
 import TaskUtil
-import Component exposing (Update)
+import Component exposing (Component, Update)
 import StructuralEditor.Editor as Editor exposing (Editor)
 import Dux.Environment.NumberLiteralEditor as NumberLiteralEditor
 import Dux.Environment.FunctionTypeEditor as FunctionTypeEditor
@@ -24,10 +24,23 @@ type Action =
   NumberLiteralAction (Editor.Action NumberLiteralEditor.Action) |
   FunctionCallAction (Editor.Action FunctionCallEditorAction)
 
+component : Location -> Component ExpressionEditor (Editor.Action Action)
+component location =
+  {
+    init =
+      init location,
+    update =
+      update,
+    view =
+      view True,
+    inputs =
+      []
+  }
+
 init : Location -> Address (Editor.Action Action) -> Update (Editor Model)
 init location address =
   let result =
-        { initEditor | task <- task }
+        { initEditor | task = task }
       task =
         [
           initNumberLiteral.task,
@@ -47,8 +60,8 @@ updateContext : Editor.UpdateContext ExpressionEditor Action
 updateContext =
   let result =
         { defaultUpdateContext |
-          customAction <- customAction,
-          valueChanged <- valueChanged
+          customAction = customAction,
+          valueChanged = valueChanged
         }
       defaultUpdateContext =
         Editor.defaultUpdateContext
@@ -59,7 +72,7 @@ updateContext =
               NumberLiteral numberLiteral ->
                 let result =
                       Component.returnAndRun
-                        { editor | model <- updatedModel }
+                        { editor | model = updatedModel }
                         task
                     updatedModel =
                       updateNumberLiteral.model |> NumberLiteral
@@ -75,7 +88,7 @@ updateContext =
               FunctionCall functionCall ->
                 let result =
                       Component.returnAndRun
-                        { editor | model <- updatedModel }
+                        { editor | model = updatedModel }
                         task
                     updatedModel =
                       updateFunctionCall.model |> FunctionCall
@@ -94,7 +107,7 @@ updateContext =
             FunctionCall functionCallEditor ->
               let result =
                     Component.returnAndRun
-                      { editor | model <- initNumberLiteral.model |> NumberLiteral }
+                      { editor | model = initNumberLiteral.model |> NumberLiteral }
                       task
                   task =
                     [
@@ -111,7 +124,7 @@ updateContext =
             NumberLiteral numberLiteralEditor ->
               let result =
                     Component.returnAndRun
-                      { editor | model <- initFunctionCall.model |> FunctionCall }
+                      { editor | model = initFunctionCall.model |> FunctionCall }
                       task
                   task =
                     [
@@ -132,7 +145,7 @@ view focused address editor =
 viewContext : Editor.ViewContext Model Action
 viewContext =
   {
-    view focused address editor =
+    view = \focused address editor ->
       case editor.model of
         NumberLiteral numberLiteral ->
           NumberLiteralEditor.view focused (address `Signal.forwardTo` NumberLiteralAction) numberLiteral
@@ -165,10 +178,23 @@ type FunctionCallEditorAction =
   FirstArgumentAction (Editor.Action Action) |
   SecondArgumentAction (Editor.Action Action)
 
+functionCallEditorComponent : Location -> Component FunctionCallEditor (Editor.Action FunctionCallEditorAction)
+functionCallEditorComponent location =
+  {
+    init =
+      functionCallEditorInit location,
+    update =
+      functionCallEditorUpdate,
+    view =
+      functionCallEditorView True,
+    inputs =
+      []
+  }
+
 functionCallEditorInit : Location -> Address (Editor.Action FunctionCallEditorAction) -> Update (Editor FunctionCallEditorModel)
 functionCallEditorInit location address =
   let result =
-        { initEditor | task <-
+        { initEditor | task =
           [
             initFunctionType.task,
             initFirstArgument.task,
@@ -214,7 +240,7 @@ functionCallEditorUpdate address action editor =
 functionCallEditorUpdateContext : Editor.UpdateContext FunctionCallEditor FunctionCallEditorAction
 functionCallEditorUpdateContext =
   let result =
-        { defaultUpdateContext | customAction <- customAction }
+        { defaultUpdateContext | customAction = customAction }
       defaultUpdateContext =
         Editor.defaultUpdateContext
       customAction address action editor =
@@ -222,10 +248,10 @@ functionCallEditorUpdateContext =
           FunctionTypeAction functionTypeAction ->
             let result =
                   Component.returnAndRun
-                    { editor | model <- updatedModel }
+                    { editor | model = updatedModel }
                     functionTypeUpdate.task
                 updatedModel =
-                  { model | functionType <- functionTypeUpdate.model }
+                  { model | functionType = functionTypeUpdate.model }
                 model =
                   editor.model
                 functionTypeUpdate =
@@ -234,10 +260,10 @@ functionCallEditorUpdateContext =
           FirstArgumentAction firstArgumentAction ->
             let result =
                   Component.returnAndRun
-                    { editor | model <- updatedModel }
+                    { editor | model = updatedModel }
                     firstArgumentUpdate.task
                 updatedModel =
-                  { model | firstArgument <- firstArgumentUpdate.model }
+                  { model | firstArgument = firstArgumentUpdate.model }
                 model =
                   editor.model
                 firstArgumentUpdate =
@@ -246,10 +272,10 @@ functionCallEditorUpdateContext =
           SecondArgumentAction secondArgumentAction ->
             let result =
                   Component.returnAndRun
-                    { editor | model <- updatedModel }
+                    { editor | model = updatedModel }
                     secondArgumentUpdate.task
                 updatedModel =
-                  { model | secondArgument <- secondArgumentUpdate.model }
+                  { model | secondArgument = secondArgumentUpdate.model }
                 model =
                   editor.model
                 secondArgumentUpdate =

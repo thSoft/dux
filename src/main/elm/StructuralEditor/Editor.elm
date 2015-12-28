@@ -118,15 +118,15 @@ type alias EventHandler editor action =
 defaultUpdateContext : UpdateContext editor action
 defaultUpdateContext =
   {
-    valueChanged _ _ editor =
+    valueChanged = \_ _ editor ->
       Component.return editor,
-    childAdded _ _ editor =
+    childAdded = \_ _ editor ->
       Component.return editor,
-    childRemoved _ _ editor =
+    childRemoved = \_ _ editor ->
       Component.return editor,
-    childMoved _ _ editor =
+    childMoved = \_ _ editor ->
       Component.return editor,
-    customAction _ _ editor =
+    customAction = \_ _ editor ->
       Component.return editor
   }
 
@@ -138,13 +138,13 @@ update context address action editor =
     SubscriptionResult eventType subscriptionResult ->
       Component.return
         { editor |
-          subscriptions <-
+          subscriptions =
             editor.subscriptions |> Dict.insert eventType subscriptionResult
         }
     Event eventType snapshot ->
       let result =
             Component.returnAndRun
-              { updatedEditor | priority <- snapshot.priority }
+              { updatedEditor | priority = snapshot.priority }
               update.task
           updatedEditor =
             update.model

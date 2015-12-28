@@ -4,7 +4,7 @@ import Signal exposing (Address)
 import Html exposing (Html)
 import Json.Decode as Decode
 import ElmFire exposing (Location)
-import Component exposing (Update)
+import Component exposing (Component, Update)
 import DecodeUtil
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.ValueEditor as ValueEditor exposing (ValueEditor)
@@ -21,6 +21,19 @@ type alias Data =
 
 type alias Action =
   ValueEditor.Action
+
+component : Location -> Component NumberLiteralEditor (Editor.Action Action)
+component location =
+  {
+    init =
+      init location,
+    update =
+      update,
+    view =
+      view True,
+    inputs =
+      []
+  }
 
 init : Location -> Address (Editor.Action Action) -> Update (Editor Model)
 init location address =

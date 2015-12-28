@@ -20,17 +20,7 @@ type alias Model =
 
 output : Output Model
 output =
-  Component.start
-    {
-      init =
-        NumberLiteralEditor.init location,
-      update =
-        NumberLiteralEditor.update,
-      view =
-        NumberLiteralEditor.view True,
-      inputs =
-        []
-    }
+  NumberLiteralEditor.component location |> Component.start
 
 location : Location
 location =

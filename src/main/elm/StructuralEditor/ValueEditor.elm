@@ -7,7 +7,7 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import TaskUtil
 import ElmFire exposing (Reference, Location)
-import Component exposing (Update)
+import Component exposing (Component, Update)
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.Combobox as Combobox
 import StructuralEditor.Styles as Styles
@@ -27,6 +27,19 @@ type NoData =
 
 type Action =
   ComboboxAction Combobox.Action
+
+component : Context data -> Location -> Component (ValueEditor data) (Editor.Action Action)
+component context location =
+  {
+    init =
+      init location,
+    update =
+      update context,
+    view =
+      view context True,
+    inputs =
+      []
+  }
 
 init : Location -> Address (Editor.Action Action) -> Update (ValueEditor data)
 init location address =
@@ -66,15 +79,15 @@ update context address action editor =
 updateContext : Context data -> Editor.UpdateContext (ValueEditor data) Action
 updateContext context =
   {
-    valueChanged _ snapshot editor =
+    valueChanged = \_ snapshot editor ->
       let result =
             Component.return
-              { editor | model <- updatedModel }
+              { editor | model = updatedModel }
           updatedModel =
               { model |
-                data <-
+                data =
                   data,
-                combobox <-
+                combobox =
                   Combobox.update comboboxAction model.combobox |> .model
               }
           model =
@@ -91,25 +104,25 @@ updateContext context =
             )
             |> Maybe.withDefault Combobox.None
       in result,
-    childAdded _ _ editor =
+    childAdded = \_ _ editor ->
       Component.return editor,
-    childRemoved _ _ editor =
+    childRemoved = \_ _ editor ->
       Component.return editor,
-    childMoved _ _ editor =
+    childMoved = \_ _ editor ->
       Component.return editor,
-    customAction _ action editor =
+    customAction = \_ action editor ->
       case action of
         ComboboxAction comboboxAction ->
           let result =
                 Component.returnAndRun
-                  { editor | model <- updatedModel }
+                  { editor | model = updatedModel }
                   updateCombobox.task
               updateCombobox =
                 Combobox.update
                   comboboxAction
                   model.combobox
               updatedModel =
-                { model | combobox <- updateCombobox.model }
+                { model | combobox = updateCombobox.model }
               model =
                 editor.model
           in result
@@ -122,7 +135,7 @@ view context focused address editor =
 viewContext : Context data -> Editor.ViewContext (Model data) Action
 viewContext context =
   {
-    view focused address editor =
+    view = \focused address editor ->
       let result =
             Html.div
               [Attributes.style <| Styles.bordered borderColor]

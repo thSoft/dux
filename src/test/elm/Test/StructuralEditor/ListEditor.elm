@@ -27,17 +27,7 @@ type alias Element =
 
 output : Output Model
 output =
-  Component.start
-    {
-      init =
-        ListEditor.init context location,
-      update =
-        ListEditor.update context,
-      view =
-        ListEditor.view context True,
-      inputs =
-        []
-    }
+  ListEditor.component context location |> Component.start
 
 location : Location
 location =

@@ -75,8 +75,12 @@ start component =
             Signal.forwardTo messages.address Just
 
         -- update : Maybe action -> Update model -> Update model
-        update (Just action) { model } =
-            component.update address action model
+        update maybeAction theUpdate =
+          case maybeAction of
+            Just action ->
+              component.update address action theUpdate.model
+            Nothing ->
+              theUpdate
 
         -- inputs : Signal (Maybe action)
         inputs =
