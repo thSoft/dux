@@ -228,20 +228,106 @@ subscribe address url =
 map : (Stored a -> b) -> Mapping a -> Mapping b
 map function mapping =
   { mapping |
-     transform = \url cache ->
-       mapping.transform url cache |> function |> Ok
+      transform = \url cache ->
+        mapping.transform url cache |> function |> Ok
   }
 
 object1 : (Stored a -> b) -> Mapping a -> Mapping b
 object1 =
   map
-{-
+
 object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
+object2 function mappingA mappingB =
+  let result =
+        {
+          getRealUrl =
+            identity,
+          transform = \url cache ->
+            let result =
+                  function a b |> Ok
+                a =
+                  mappingA.transform (mappingA.getRealUrl url) cache
+                b =
+                  mappingB.transform (mappingB.getRealUrl url) cache
+            in result,
+          subscribe = \address url ->
+            TaskUtil.parallel [
+              mappingA.subscribe address (mappingA.getRealUrl url),
+              mappingB.subscribe address (mappingB.getRealUrl url)
+            ],
+          handle = \event ->
+            TaskUtil.parallel [
+              mappingA.handle event,
+              mappingB.handle event
+            ]
+        }
+  in result
 
 object3 : (Stored a -> Stored b -> Stored c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
+object3 function mappingA mappingB mappingC =
+  {
+    getRealUrl =
+      identity,
+    transform = \url cache ->
+      let result =
+            function a b c |> Ok
+          a =
+            mappingA.transform (mappingA.getRealUrl url) cache
+          b =
+            mappingB.transform (mappingB.getRealUrl url) cache
+          c =
+            mappingC.transform (mappingC.getRealUrl url) cache
+      in result,
+    subscribe = \address url ->
+      TaskUtil.parallel [
+        mappingA.subscribe address (mappingA.getRealUrl url),
+        mappingB.subscribe address (mappingB.getRealUrl url),
+        mappingC.subscribe address (mappingC.getRealUrl url)
+      ],
+    handle = \event ->
+      TaskUtil.parallel [
+        mappingA.handle event,
+        mappingB.handle event,
+        mappingC.handle event
+      ]
+  }
 
 object4 : (Stored a -> Stored b -> Stored c -> Stored d -> e) -> Mapping a -> Mapping b -> Mapping c -> Mapping d -> Mapping e
+object4 function mappingA mappingB mappingC mappingD =
+  {
+    getRealUrl =
+      identity,
+    transform = \url cache ->
+      let result =
+            function a b c d |> Ok
+          a =
+            mappingA.transform (mappingA.getRealUrl url) cache
+          b =
+            mappingB.transform (mappingB.getRealUrl url) cache
+          c =
+            mappingC.transform (mappingC.getRealUrl url) cache
+          d =
+            mappingD.transform (mappingD.getRealUrl url) cache
+      in result,
+    subscribe = \address url ->
+      TaskUtil.parallel [
+        mappingA.subscribe address (mappingA.getRealUrl url),
+        mappingB.subscribe address (mappingB.getRealUrl url),
+        mappingC.subscribe address (mappingC.getRealUrl url),
+        mappingD.subscribe address (mappingD.getRealUrl url)
+      ],
+    handle = \event ->
+      TaskUtil.parallel [
+        mappingA.handle event,
+        mappingB.handle event,
+        mappingC.handle event,
+        mappingD.handle event
+      ]
+  }
 
+-- TODO up to object8
+
+{-
 reference : Mapping a -> Mapping (Reference a)
 
 type alias Reference a =
