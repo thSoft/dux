@@ -3,8 +3,9 @@ module FirebaseModel.Mapping where
 import Dict exposing (Dict)
 import Signal exposing (Address)
 import Json.Decode as Decode
-import ElmFire
+import Task
 import TaskUtil
+import ElmFire
 import Component exposing (Update, HandledTask)
 
 type alias Stored a =
@@ -31,11 +32,11 @@ mirror mapping url =
   let result =
         {
           model =
-            Signal.map (transformCache mapping url) caches,
+            Signal.map (mapping.transform realUrl) caches,
           tasksToRun =
             Signal.mergeMany [
-              subscribeTask |> Signal.constant
-              --getTasks mapping eventMailbox
+              subscribeTask |> Signal.constant,
+              eventMailbox.signal |> Signal.map mapping.handle
             ]
         }
       caches =
@@ -43,12 +44,17 @@ mirror mapping url =
       eventMailbox =
         Signal.mailbox Nothing
       subscribeTask =
-        subscribe eventMailbox.address url
+        mapping.subscribe eventMailbox.address realUrl
+      realUrl =
+        mapping.getRealUrl url
   in result
 
 type alias Mapping a =
   {
-    decoder: Decode.Decoder a
+    getRealUrl: String -> String,
+    transform: String -> Cache -> Stored a,
+    subscribe: Address Event -> String -> HandledTask,
+    handle: Event -> HandledTask
   }
 
 type alias Event =
@@ -62,38 +68,18 @@ type EntryEvent =
   Unsubscribed |
   SubscriptionFailed ElmFire.Error |
   Cancelled ElmFire.Cancellation |
-  ValueChanged Decode.Value{- |
+  ValueChanged Decode.Value |
   ChildAdded String |
-  ChildRemoved String-}
+  ChildRemoved String
 
 type alias Cache =
-  Dict String Entry
+  Dict String Entry -- TODO List Entry and include url and mapping in Entry
 
 type alias Entry =
   {
     maybeValue: Maybe Decode.Value,
     subscription: Result SubscriptionError ElmFire.Subscription
   }
-
-transformCache : Mapping a -> String -> Cache -> Stored a
-transformCache mapping url cache =
-  case cache |> Dict.get url of
-    Nothing ->
-      Err (SubscriptionError NoSubscription)
-    Just entry ->
-      case entry.maybeValue of
-        Nothing ->
-          case entry.subscription of
-            Err subscriptionError ->
-              Err (SubscriptionError subscriptionError)
-            Ok _ ->
-              Err Loading
-        Just value ->
-          case value |> Decode.decodeValue mapping.decoder of
-            Err error ->
-              Err <| DecodingError error
-            Ok model ->
-              Ok model
 
 initialCache : Cache
 initialCache =
@@ -157,6 +143,43 @@ update event cache =
         _ ->
           cache
 
+-- Mappings
+
+fromDecoder : Decode.Decoder a -> Mapping a
+fromDecoder decoder =
+  {
+    getRealUrl =
+      identity,
+    transform =
+      decode decoder,
+    subscribe =
+      subscribe,
+    handle = \_ ->
+      Task.succeed ()
+  }
+
+decode : Decode.Decoder a -> String -> Cache -> Stored a
+decode decoder url cache =
+  let result =
+        case cache |> Dict.get url of
+          Nothing ->
+            Err (SubscriptionError NoSubscription)
+          Just entry ->
+            case entry.maybeValue of
+              Nothing ->
+                case entry.subscription of
+                  Err subscriptionError ->
+                    Err (SubscriptionError subscriptionError)
+                  Ok _ ->
+                    Err Loading
+              Just value ->
+                case value |> Decode.decodeValue decoder of
+                  Err error ->
+                    Err <| DecodingError error
+                  Ok model ->
+                    Ok model
+  in result
+
 subscribe : Address Event -> String -> HandledTask
 subscribe address url =
   let result =
@@ -195,39 +218,38 @@ subscribe address url =
         ElmFire.valueChanged
   in result
 
---getTasks : Mapping a -> Mailbox Event -> Signal Event
---getTasks mapping eventMailbox =
-
--- Mappings
-
-fromDecoder : Decode.Decoder a -> Mapping a
-fromDecoder decoder =
-  {
-    decoder =
-      decoder
+(:=) : String -> Mapping a -> Mapping a
+(:=) key mapping =
+  { mapping |
+      getRealUrl = \url ->
+        mapping.getRealUrl url ++ "/" ++ key
   }
 
+map : (Stored a -> b) -> Mapping a -> Mapping b
+map function mapping =
+  { mapping |
+     transform = \url cache ->
+       mapping.transform url cache |> function |> Ok
+  }
+
+object1 : (Stored a -> b) -> Mapping a -> Mapping b
+object1 =
+  map
 {-
-map : (a -> b) -> Mapping a -> Mapping b
+object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
 
-object1 : (a -> b) -> Mapping a -> Mapping b
+object3 : (Stored a -> Stored b -> Stored c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
 
-object2 : (a -> b -> c) -> Mapping a -> Mapping b -> Mapping c
-
-object3 : (a -> b -> c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
-
-object4 : (a -> b -> c -> d -> e) -> Mapping a -> Mapping b -> Mapping c -> Mapping d -> Mapping e
-
-(:=) : String -> Mapping a -> Mapping a
-
-list : Mapping a -> Mapping (List a)
-
-oneOf : List (Mapping a) -> Mapping a -- TODO is this good?
+object4 : (Stored a -> Stored b -> Stored c -> Stored d -> e) -> Mapping a -> Mapping b -> Mapping c -> Mapping d -> Mapping e
 
 reference : Mapping a -> Mapping (Reference a)
--}
 
 type alias Reference a =
   {
     get: () -> Stored a
   }
+
+list : Mapping a -> Mapping (List a)
+
+oneOf : List (Mapping a) -> Mapping a -- TODO is this good?
+-}
