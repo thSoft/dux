@@ -1,7 +1,8 @@
 module Dux.Language.Mappings where
 
+import Dict
 import Json.Decode as Decode
-import FirebaseModel.Mapping as Mapping exposing (Mapping)
+import FirebaseModel.Mapping as Mapping exposing (Mapping, (:=))
 import Dux.Language.Types exposing (..)
 
 functionType : Mapping FunctionType
@@ -18,11 +19,11 @@ functionType =
           Ok Multiply
         "divide" ->
           Ok Divide
-        _ ->
-          Err "unknown function type"
+        unknown ->
+          Err <| "Unknown function type: " ++ unknown
     )
   |> Mapping.fromDecoder
-{-
+
 numberLiteral : Mapping NumberLiteral
 numberLiteral =
   Mapping.object1
@@ -40,8 +41,7 @@ functionCall =
 expression : Mapping Expression
 expression =
   Mapping.oneOf
-    [
-      numberLiteral |> Mapping.map NumberLiteralExpression,
-      functionCall |> Mapping.map FunctionCallExpression
-    ]
--}
+    (Dict.fromList [
+      ("numberLiteral", numberLiteral |> Mapping.map NumberLiteralExpression),
+      ("functionCall", functionCall |> Mapping.map FunctionCallExpression)
+    ])

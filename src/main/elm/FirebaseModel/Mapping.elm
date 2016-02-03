@@ -9,7 +9,13 @@ import ElmFire
 import Component exposing (Update, HandledTask)
 
 type alias Stored a =
-  Result Error a
+  Result (Remote Error) a
+
+type alias Remote a =
+  {
+    url: String,
+    data: a
+  }
 
 type Error =
   Loading |
@@ -58,10 +64,7 @@ type alias Mapping a =
   }
 
 type alias Event =
-  Maybe {
-    url: String,
-    entryEvent: EntryEvent
-  }
+  Maybe (Remote EntryEvent)
 
 type EntryEvent =
   Subscribed ElmFire.Subscription |
@@ -73,7 +76,7 @@ type EntryEvent =
   ChildRemoved String
 
 type alias Cache =
-  Dict String Entry -- TODO List Entry and include url and mapping in Entry
+  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry
 
 type alias Entry =
   {
@@ -90,8 +93,8 @@ update event cache =
   case event of
     Nothing ->
       cache
-    Just { url, entryEvent } ->
-      case entryEvent of
+    Just { url, data } ->
+      case data of
         Subscribed subscription ->
           cache |> Dict.update url (\maybeEntry ->
             case maybeEntry of
@@ -104,8 +107,8 @@ update event cache =
                 }
               Just entry ->
                 Just { entry |
-                    subscription =
-                      Ok subscription
+                  subscription =
+                    Ok subscription
                 }
           )
         Unsubscribed ->
@@ -120,8 +123,8 @@ update event cache =
                 }
               Just entry ->
                 Just { entry |
-                    subscription =
-                      Err NoSubscription
+                  subscription =
+                    Err NoSubscription
                 }
           )
         ValueChanged value ->
@@ -136,8 +139,8 @@ update event cache =
                 }
               Just entry ->
                 Just { entry |
-                    maybeValue =
-                      Just value
+                  maybeValue =
+                    Just value
                 }
           )
         _ ->
@@ -160,25 +163,48 @@ fromDecoder decoder =
 
 decode : Decode.Decoder a -> String -> Cache -> Stored a
 decode decoder url cache =
-  let result =
-        case cache |> Dict.get url of
-          Nothing ->
-            Err (SubscriptionError NoSubscription)
-          Just entry ->
-            case entry.maybeValue of
-              Nothing ->
-                case entry.subscription of
-                  Err subscriptionError ->
-                    Err (SubscriptionError subscriptionError)
-                  Ok _ ->
-                    Err Loading
-              Just value ->
-                case value |> Decode.decodeValue decoder of
-                  Err error ->
-                    Err <| DecodingError error
-                  Ok model ->
-                    Ok model
-  in result
+  mapValue
+    (\value ->
+      case value |> Decode.decodeValue decoder of
+        Err error ->
+          Err <| DecodingError error
+        Ok model ->
+          Ok model
+    )
+    url
+    cache
+
+mapValue : (Decode.Value -> Result Error a) -> String -> Cache -> Stored a
+mapValue function url cache =
+  (case cache |> Dict.get url of
+    Nothing ->
+      Err (SubscriptionError NoSubscription)
+    Just entry ->
+      case entry.maybeValue of
+        Nothing ->
+          case entry.subscription of
+            Err subscriptionError ->
+              Err (SubscriptionError subscriptionError)
+            Ok _ ->
+              Err Loading
+        Just value ->
+          function value
+  ) |> wrap url
+
+wrap : String -> Result Error a -> Stored a
+wrap url result =
+  result |> Result.formatError (\error ->
+    {
+      url =
+        url,
+      data =
+        error
+    }
+  )
+
+unwrap : Stored a -> Result Error a
+unwrap stored =
+  stored |> Result.formatError .data
 
 subscribe : Address Event -> String -> HandledTask
 subscribe address url =
@@ -208,7 +234,7 @@ subscribe address url =
         Just {
           url =
             url,
-          entryEvent =
+          data =
             entryEvent
         }
         |> Signal.send address
@@ -221,47 +247,41 @@ subscribe address url =
 (:=) : String -> Mapping a -> Mapping a
 (:=) key mapping =
   { mapping |
-      getRealUrl = \url ->
-        mapping.getRealUrl url ++ "/" ++ key
-  }
-
-map : (Stored a -> b) -> Mapping a -> Mapping b
-map function mapping =
-  { mapping |
-      transform = \url cache ->
-        mapping.transform url cache |> function |> Ok
+    getRealUrl = \url ->
+      mapping.getRealUrl (url ++ "/" ++ key)
   }
 
 object1 : (Stored a -> b) -> Mapping a -> Mapping b
-object1 =
-  map
+object1 function mapping =
+  { mapping |
+    transform = \url cache ->
+      mapping.transform url cache |> function |> Ok
+  }
 
 object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
 object2 function mappingA mappingB =
-  let result =
-        {
-          getRealUrl =
-            identity,
-          transform = \url cache ->
-            let result =
-                  function a b |> Ok
-                a =
-                  mappingA.transform (mappingA.getRealUrl url) cache
-                b =
-                  mappingB.transform (mappingB.getRealUrl url) cache
-            in result,
-          subscribe = \address url ->
-            TaskUtil.parallel [
-              mappingA.subscribe address (mappingA.getRealUrl url),
-              mappingB.subscribe address (mappingB.getRealUrl url)
-            ],
-          handle = \event ->
-            TaskUtil.parallel [
-              mappingA.handle event,
-              mappingB.handle event
-            ]
-        }
-  in result
+  {
+    getRealUrl =
+      identity,
+    transform = \url cache ->
+      let result =
+            function a b |> Ok
+          a =
+            mappingA.transform (mappingA.getRealUrl url) cache
+          b =
+            mappingB.transform (mappingB.getRealUrl url) cache
+      in result,
+    subscribe = \address url ->
+      TaskUtil.parallel [
+        mappingA.subscribe address (mappingA.getRealUrl url),
+        mappingB.subscribe address (mappingB.getRealUrl url)
+      ],
+    handle = \event ->
+      TaskUtil.parallel [
+        mappingA.handle event,
+        mappingB.handle event
+      ]
+  }
 
 object3 : (Stored a -> Stored b -> Stored c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
 object3 function mappingA mappingB mappingC =
@@ -327,6 +347,49 @@ object4 function mappingA mappingB mappingC mappingD =
 
 -- TODO up to object8
 
+map : (a -> b) -> Mapping a -> Mapping b
+map function mapping =
+  { mapping |
+    transform = \url cache ->
+      mapping.transform url cache |> Result.map function
+  }
+
+oneOf : Dict String (Mapping a) -> Mapping a
+oneOf mappings =
+  let result =
+        {
+          getRealUrl =
+            identity,
+          transform = \url cache ->
+            let result =
+                  storedTypeName `Result.andThen` (\typeName ->
+                    (findMapping typeName) `Result.andThen` (\mapping ->
+                      mapping.transform (url |> mapping.getRealUrl |> valueUrl) cache
+                      |> unwrap
+                    )
+                  ) |> wrap url
+                storedTypeName =
+                  decode Decode.string (typeUrl url) cache
+                  |> unwrap
+            in result,
+          subscribe = \address url ->
+            TaskUtil.parallel [
+              subscribe address (typeUrl url),
+              subscribe address (valueUrl url)
+            ],
+          handle = \_ ->
+            Task.succeed () -- TODO handle type change and call handle of current mapping
+        }
+      typeUrl url =
+        url ++ "/type"
+      valueUrl url =
+        url ++ "/value"
+      findMapping typeName =
+        mappings
+        |> Dict.get typeName
+        |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
+  in result
+
 {-
 reference : Mapping a -> Mapping (Reference a)
 
@@ -336,6 +399,4 @@ type alias Reference a =
   }
 
 list : Mapping a -> Mapping (List a)
-
-oneOf : List (Mapping a) -> Mapping a -- TODO is this good?
 -}
