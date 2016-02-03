@@ -38,7 +38,7 @@ mirror mapping url =
   let result =
         {
           model =
-            Signal.map (mapping.transform realUrl) caches,
+            Signal.map (mapping.transform url) caches,
           tasksToRun =
             Signal.mergeMany [
               subscribeTask |> Signal.constant,
@@ -50,14 +50,11 @@ mirror mapping url =
       eventMailbox =
         Signal.mailbox Nothing
       subscribeTask =
-        mapping.subscribe eventMailbox.address realUrl
-      realUrl =
-        mapping.getRealUrl url
+        mapping.subscribe eventMailbox.address url
   in result
 
 type alias Mapping a =
   {
-    getRealUrl: String -> String,
     transform: String -> Cache -> Stored a,
     subscribe: Address Event -> String -> HandledTask,
     handle: Event -> HandledTask
@@ -151,8 +148,6 @@ update event cache =
 fromDecoder : Decode.Decoder a -> Mapping a
 fromDecoder decoder =
   {
-    getRealUrl =
-      identity,
     transform =
       decode decoder,
     subscribe =
@@ -246,10 +241,16 @@ subscribe address url =
 
 (:=) : String -> Mapping a -> Mapping a
 (:=) key mapping =
-  { mapping |
-    getRealUrl = \url ->
-      mapping.getRealUrl (url ++ "/" ++ key)
-  }
+  let result =
+        { mapping |
+          transform = \url cache ->
+            mapping.transform (realUrl url) cache,
+          subscribe = \address url ->
+            mapping.subscribe address (realUrl url)
+        }
+      realUrl = \url ->
+        url ++ "/" ++ key
+  in result
 
 object1 : (Stored a -> b) -> Mapping a -> Mapping b
 object1 function mapping =
@@ -261,20 +262,18 @@ object1 function mapping =
 object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
 object2 function mappingA mappingB =
   {
-    getRealUrl =
-      identity,
     transform = \url cache ->
       let result =
             function a b |> Ok
           a =
-            mappingA.transform (mappingA.getRealUrl url) cache
+            mappingA.transform url cache
           b =
-            mappingB.transform (mappingB.getRealUrl url) cache
+            mappingB.transform url cache
       in result,
     subscribe = \address url ->
       TaskUtil.parallel [
-        mappingA.subscribe address (mappingA.getRealUrl url),
-        mappingB.subscribe address (mappingB.getRealUrl url)
+        mappingA.subscribe address url,
+        mappingB.subscribe address url
       ],
     handle = \event ->
       TaskUtil.parallel [
@@ -286,23 +285,21 @@ object2 function mappingA mappingB =
 object3 : (Stored a -> Stored b -> Stored c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
 object3 function mappingA mappingB mappingC =
   {
-    getRealUrl =
-      identity,
     transform = \url cache ->
       let result =
             function a b c |> Ok
           a =
-            mappingA.transform (mappingA.getRealUrl url) cache
+            mappingA.transform url cache
           b =
-            mappingB.transform (mappingB.getRealUrl url) cache
+            mappingB.transform url cache
           c =
-            mappingC.transform (mappingC.getRealUrl url) cache
+            mappingC.transform url cache
       in result,
     subscribe = \address url ->
       TaskUtil.parallel [
-        mappingA.subscribe address (mappingA.getRealUrl url),
-        mappingB.subscribe address (mappingB.getRealUrl url),
-        mappingC.subscribe address (mappingC.getRealUrl url)
+        mappingA.subscribe address url,
+        mappingB.subscribe address url,
+        mappingC.subscribe address url
       ],
     handle = \event ->
       TaskUtil.parallel [
@@ -315,26 +312,24 @@ object3 function mappingA mappingB mappingC =
 object4 : (Stored a -> Stored b -> Stored c -> Stored d -> e) -> Mapping a -> Mapping b -> Mapping c -> Mapping d -> Mapping e
 object4 function mappingA mappingB mappingC mappingD =
   {
-    getRealUrl =
-      identity,
     transform = \url cache ->
       let result =
             function a b c d |> Ok
           a =
-            mappingA.transform (mappingA.getRealUrl url) cache
+            mappingA.transform url cache
           b =
-            mappingB.transform (mappingB.getRealUrl url) cache
+            mappingB.transform url cache
           c =
-            mappingC.transform (mappingC.getRealUrl url) cache
+            mappingC.transform url cache
           d =
-            mappingD.transform (mappingD.getRealUrl url) cache
+            mappingD.transform url cache
       in result,
     subscribe = \address url ->
       TaskUtil.parallel [
-        mappingA.subscribe address (mappingA.getRealUrl url),
-        mappingB.subscribe address (mappingB.getRealUrl url),
-        mappingC.subscribe address (mappingC.getRealUrl url),
-        mappingD.subscribe address (mappingD.getRealUrl url)
+        mappingA.subscribe address url,
+        mappingB.subscribe address url,
+        mappingC.subscribe address url,
+        mappingD.subscribe address url
       ],
     handle = \event ->
       TaskUtil.parallel [
@@ -358,13 +353,11 @@ oneOf : Dict String (Mapping a) -> Mapping a
 oneOf mappings =
   let result =
         {
-          getRealUrl =
-            identity,
           transform = \url cache ->
             let result =
                   storedTypeName `Result.andThen` (\typeName ->
                     (findMapping typeName) `Result.andThen` (\mapping ->
-                      mapping.transform (url |> mapping.getRealUrl |> valueUrl) cache
+                      mapping.transform (valueUrl url) cache
                       |> unwrap
                     )
                   ) |> wrap url
