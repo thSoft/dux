@@ -9,7 +9,7 @@ import ElmFire
 import Component exposing (Update, HandledTask)
 
 type alias Stored a =
-  Result (Remote Error) a
+  Remote (Result Error a)
 
 type alias Remote a =
   {
@@ -184,22 +184,7 @@ mapValue function url cache =
               Err Loading
         Just value ->
           function value
-  ) |> wrap url
-
-wrap : String -> Result Error a -> Stored a
-wrap url result =
-  result |> Result.formatError (\error ->
-    {
-      url =
-        url,
-      data =
-        error
-    }
-  )
-
-unwrap : Stored a -> Result Error a
-unwrap stored =
-  stored |> Result.formatError .data
+  ) |> Remote url
 
 subscribe : Address Event -> String -> HandledTask
 subscribe address url =
@@ -256,7 +241,7 @@ object1 : (Stored a -> b) -> Mapping a -> Mapping b
 object1 function mapping =
   { mapping |
     transform = \url cache ->
-      mapping.transform url cache |> function |> Ok
+      mapping.transform url cache |> function |> Ok |> Remote url
   }
 
 object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
@@ -264,7 +249,7 @@ object2 function mappingA mappingB =
   {
     transform = \url cache ->
       let result =
-            function a b |> Ok
+            function a b |> Ok |> Remote url
           a =
             mappingA.transform url cache
           b =
@@ -287,7 +272,7 @@ object3 function mappingA mappingB mappingC =
   {
     transform = \url cache ->
       let result =
-            function a b c |> Ok
+            function a b c |> Ok |> Remote url
           a =
             mappingA.transform url cache
           b =
@@ -314,7 +299,7 @@ object4 function mappingA mappingB mappingC mappingD =
   {
     transform = \url cache ->
       let result =
-            function a b c d |> Ok
+            function a b c d |> Ok |> Remote url
           a =
             mappingA.transform url cache
           b =
@@ -346,7 +331,17 @@ map : (a -> b) -> Mapping a -> Mapping b
 map function mapping =
   { mapping |
     transform = \url cache ->
-      mapping.transform url cache |> Result.map function
+      mapping.transform url cache
+      |> mapRemote (\data ->
+        data |> Result.map function
+      )
+  }
+
+mapRemote : (a -> b) -> Remote a -> Remote b
+mapRemote function remote =
+  { remote |
+    data =
+      remote.data |> function
   }
 
 oneOf : Dict String (Mapping a) -> Mapping a
@@ -358,12 +353,12 @@ oneOf mappings =
                   storedTypeName `Result.andThen` (\typeName ->
                     (findMapping typeName) `Result.andThen` (\mapping ->
                       mapping.transform (valueUrl url) cache
-                      |> unwrap
+                      |> .data
                     )
-                  ) |> wrap url
+                  ) |> Remote url
                 storedTypeName =
                   decode Decode.string (typeUrl url) cache
-                  |> unwrap
+                  |> .data
             in result,
           subscribe = \address url ->
             TaskUtil.parallel [
