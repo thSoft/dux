@@ -26,6 +26,10 @@ parallel tasks =
   |> Task.Extra.parallel
   |> Task.map (always ())
 
+orDoNothing : Maybe (Task a ()) -> Task a ()
+orDoNothing =
+  Maybe.withDefault (Task.succeed ())
+
 {-| A convenience for a common pattern, where we want to take the result of
 a task and then send it to an address with a tag. For example, if you had
 the following types:

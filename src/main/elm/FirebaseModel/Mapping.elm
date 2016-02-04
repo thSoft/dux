@@ -38,15 +38,19 @@ mirror mapping url =
   let result =
         {
           model =
-            Signal.map (mapping.transform url) caches,
+            Signal.map
+              (\state ->
+                state.cache |> mapping.transform url
+              )
+              states,
           tasksToRun =
             Signal.mergeMany [
               subscribeTask |> Signal.constant,
-              eventMailbox.signal |> Signal.map mapping.handle
+              states |> Signal.map mapping.handle
             ]
         }
-      caches =
-        Signal.foldp update initialCache eventMailbox.signal
+      states =
+        Signal.foldp update initialState eventMailbox.signal
       eventMailbox =
         Signal.mailbox Nothing
       subscribeTask =
@@ -57,7 +61,15 @@ type alias Mapping a =
   {
     transform: String -> Cache -> Stored a,
     subscribe: Address Event -> String -> HandledTask,
-    handle: Event -> HandledTask
+    unsubscribe: String -> Cache -> HandledTask,
+    handle: State -> HandledTask
+  }
+
+type alias State =
+  {
+    cache: Cache,
+    previousCache: Cache,
+    lastEvent: Event
   }
 
 type alias Event =
@@ -81,67 +93,89 @@ type alias Entry =
     subscription: Result SubscriptionError ElmFire.Subscription
   }
 
-initialCache : Cache
-initialCache =
-  Dict.empty
+initialState : State
+initialState =
+  {
+    cache =
+      Dict.empty,
+    previousCache =
+      Dict.empty,
+    lastEvent =
+      Nothing
+  }
 
-update : Event -> Cache -> Cache
-update event cache =
+updateCache : Event -> (Cache -> Cache) -> State -> State
+updateCache lastEvent transform state =
+  { state |
+    cache =
+      state.cache |> transform,
+    lastEvent =
+      lastEvent
+  }
+
+update : Event -> State -> State
+update event state =
   case event of
     Nothing ->
-      cache
-    Just { url, data } ->
-      case data of
+      state
+    Just remoteEntryEvent ->
+      case remoteEntryEvent.data of
         Subscribed subscription ->
-          cache |> Dict.update url (\maybeEntry ->
-            case maybeEntry of
-              Nothing ->
-                Just {
-                  maybeValue =
-                    Nothing,
-                  subscription =
-                    Ok subscription
-                }
-              Just entry ->
-                Just { entry |
-                  subscription =
-                    Ok subscription
-                }
+          state |> updateCache event (\cache ->
+            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
+              case maybeEntry of
+                Nothing ->
+                  Just {
+                    maybeValue =
+                      Nothing,
+                    subscription =
+                      Ok subscription
+                  }
+                Just entry ->
+                  Just { entry |
+                    subscription =
+                      Ok subscription
+                  }
+            )
           )
         Unsubscribed ->
-          cache |> Dict.update url (\maybeEntry ->
-            case maybeEntry of
-              Nothing ->
-                Just {
-                  maybeValue =
-                    Nothing,
-                  subscription =
-                    Err NoSubscription
-                }
-              Just entry ->
-                Just { entry |
-                  subscription =
-                    Err NoSubscription
-                }
+          state |> updateCache event (\cache ->
+            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
+              case maybeEntry of
+                Nothing ->
+                  Just {
+                    maybeValue =
+                      Nothing,
+                    subscription =
+                      Err NoSubscription
+                  }
+                Just entry ->
+                  Just { entry |
+                    subscription =
+                      Err NoSubscription
+                  }
+            )
           )
         ValueChanged value ->
-          cache |> Dict.update url (\maybeEntry ->
-            case maybeEntry of
-              Nothing ->
-                Just {
-                  maybeValue =
-                    Just value,
-                  subscription =
-                    Err NoSubscription
-                }
-              Just entry ->
-                Just { entry |
-                  maybeValue =
-                    Just value
-                }
+          state |> updateCache event (\cache ->
+            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
+              case maybeEntry of
+                Nothing ->
+                  Just {
+                    maybeValue =
+                      Just value,
+                    subscription =
+                      Err NoSubscription
+                  }
+                Just entry ->
+                  Just { entry |
+                    maybeValue =
+                      Just value
+                  }
+            )
           )
         _ ->
-          cache
+          state
 
 -- Mappings
 
@@ -152,25 +186,14 @@ fromDecoder decoder =
       decode decoder,
     subscribe =
       subscribe,
+    unsubscribe =
+      unsubscribe,
     handle = \_ ->
       Task.succeed ()
   }
 
 decode : Decode.Decoder a -> String -> Cache -> Stored a
 decode decoder url cache =
-  mapValue
-    (\value ->
-      case value |> Decode.decodeValue decoder of
-        Err error ->
-          Err <| DecodingError error
-        Ok model ->
-          Ok model
-    )
-    url
-    cache
-
-mapValue : (Decode.Value -> Result Error a) -> String -> Cache -> Stored a
-mapValue function url cache =
   (case cache |> Dict.get url of
     Nothing ->
       Err (SubscriptionError NoSubscription)
@@ -183,7 +206,11 @@ mapValue function url cache =
             Ok _ ->
               Err Loading
         Just value ->
-          function value
+          case value |> Decode.decodeValue decoder of
+            Err error ->
+              Err <| DecodingError error
+            Ok model ->
+              Ok model
   ) |> Remote url
 
 subscribe : Address Event -> String -> HandledTask
@@ -224,20 +251,36 @@ subscribe address url =
         ElmFire.valueChanged
   in result
 
+unsubscribe : String -> Cache -> HandledTask
+unsubscribe url cache =
+  (cache |> Dict.get url) `Maybe.andThen` (\entry ->
+    entry.subscription
+    |> Result.toMaybe
+    |> Maybe.map (\subscription ->
+      subscription
+      |> ElmFire.unsubscribe
+      |> TaskUtil.swallowError "ElmFire.unsubscribe failed"
+    )
+  ) |> TaskUtil.orDoNothing
+
 (:=) : String -> Mapping a -> Mapping a
 (:=) key mapping =
   let result =
-        { mapping |
+        {
           transform = \url cache ->
             mapping.transform (realUrl url) cache,
           subscribe = \address url ->
-            mapping.subscribe address (realUrl url)
+            mapping.subscribe address (realUrl url),
+          unsubscribe = \url cache ->
+            mapping.unsubscribe (realUrl url) cache,
+          handle = \state ->
+            mapping.handle state
         }
       realUrl = \url ->
         url ++ "/" ++ key
   in result
 
-object1 : (Stored a -> b) -> Mapping a -> Mapping b
+object1 : (Stored a -> b) -> Mapping a -> Mapping b -- TODO (String, Mapping a) instead of (:=)?
 object1 function mapping =
   { mapping |
     transform = \url cache ->
@@ -260,10 +303,15 @@ object2 function mappingA mappingB =
         mappingA.subscribe address url,
         mappingB.subscribe address url
       ],
-    handle = \event ->
+    unsubscribe = \url cache ->
       TaskUtil.parallel [
-        mappingA.handle event,
-        mappingB.handle event
+        mappingA.unsubscribe url cache,
+        mappingB.unsubscribe url cache
+      ],
+    handle = \state ->
+      TaskUtil.parallel [
+        mappingA.handle state,
+        mappingB.handle state
       ]
   }
 
@@ -286,11 +334,17 @@ object3 function mappingA mappingB mappingC =
         mappingB.subscribe address url,
         mappingC.subscribe address url
       ],
-    handle = \event ->
+    unsubscribe = \url cache ->
       TaskUtil.parallel [
-        mappingA.handle event,
-        mappingB.handle event,
-        mappingC.handle event
+        mappingA.unsubscribe url cache,
+        mappingB.unsubscribe url cache,
+        mappingC.unsubscribe url cache
+      ],
+    handle = \state ->
+      TaskUtil.parallel [
+        mappingA.handle state,
+        mappingB.handle state,
+        mappingC.handle state
       ]
   }
 
@@ -316,12 +370,19 @@ object4 function mappingA mappingB mappingC mappingD =
         mappingC.subscribe address url,
         mappingD.subscribe address url
       ],
-    handle = \event ->
+    unsubscribe = \url cache ->
       TaskUtil.parallel [
-        mappingA.handle event,
-        mappingB.handle event,
-        mappingC.handle event,
-        mappingD.handle event
+        mappingA.unsubscribe url cache,
+        mappingB.unsubscribe url cache,
+        mappingC.unsubscribe url cache,
+        mappingD.unsubscribe url cache
+      ],
+    handle = \state ->
+      TaskUtil.parallel [
+        mappingA.handle state,
+        mappingB.handle state,
+        mappingC.handle state,
+        mappingD.handle state
       ]
   }
 
@@ -365,8 +426,26 @@ oneOf mappings =
               subscribe address (typeUrl url),
               subscribe address (valueUrl url)
             ],
-          handle = \_ ->
-            Task.succeed () -- TODO handle type change and call handle of current mapping
+          unsubscribe = \url cache ->
+            TaskUtil.parallel [
+              unsubscribe (typeUrl url) cache,
+              unsubscribe (valueUrl url) cache
+              -- TODO unsubscribe with current mapping
+            ],
+          handle = \state ->
+            let result =
+                  TaskUtil.parallel [
+                    unsubscribeWithOldMapping,
+                    subscribeWithNewMapping,
+                    handleCurrentMapping
+                  ]
+                unsubscribeWithOldMapping =
+                  Task.succeed () -- TODO
+                subscribeWithNewMapping =
+                  Task.succeed () -- TODO
+                handleCurrentMapping =
+                  Task.succeed () -- TODO
+            in result
         }
       typeUrl url =
         url ++ "/type"
