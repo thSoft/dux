@@ -1,4 +1,4 @@
-module Test.Dux.Environment.Language.Mappings where
+module Test.Dux.Language.Mappings where
 
 import Task exposing (Task)
 import Html exposing (Html)
