@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 
 cd ${0%/*}
+npm install -g elm@0.16.0
 npm install
