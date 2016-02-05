@@ -32,16 +32,17 @@ numberLiteral =
 
 functionCall : Mapping FunctionCall
 functionCall =
-  Mapping.object3
-    FunctionCall
-    ("functionType" := functionType)
-    ("firstArgument" := expression)
-    ("secondArgument" := expression)
+  Mapping.recursive <| \() ->
+    Mapping.object3
+      FunctionCall
+      ("functionType" := functionType)
+      ("firstArgument" := expression)
+      ("secondArgument" := expression)
 
 expression : Mapping Expression
 expression =
-  Mapping.oneOf
-    (Dict.fromList [
+  Mapping.oneOf <|
+    Dict.fromList [
       ("numberLiteral", numberLiteral |> Mapping.map NumberLiteralExpression),
-      ("functionCall", functionCall |> Mapping.map FunctionCallExpression)
-    ])
+      ("functionCall", Mapping.recursive <| \() -> functionCall |> Mapping.map FunctionCallExpression)
+    ]

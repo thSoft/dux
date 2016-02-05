@@ -8,6 +8,12 @@ import Lazy exposing (Lazy)
 import TaskUtil exposing (HandledTask)
 import ElmFire
 
+type alias Output a =
+  {
+    model: Signal (Stored a),
+    tasksToRun : Signal HandledTask
+  }
+
 type alias Stored a =
   Remote (Result Error a)
 
@@ -27,12 +33,6 @@ type SubscriptionError =
   ElmFireError ElmFire.Error |
   ElmFireCancellation ElmFire.Cancellation
 
-type alias Output a =
-  {
-    model: Signal (Stored a),
-    tasksToRun : Signal HandledTask
-  }
-
 mirror : Mapping a -> String -> Output a
 mirror mapping url =
   let result =
@@ -40,13 +40,13 @@ mirror mapping url =
           model =
             Signal.map
               (\state ->
-                state.cache |> mapping.transform url
+                state.cache |> mappingFunctions.transform url
               )
               states,
           tasksToRun =
             Signal.mergeMany [
               subscribeTask |> Signal.constant,
-              states |> Signal.map (mapping.handle eventMailbox.address url)
+              states |> Signal.map (mappingFunctions.handle eventMailbox.address url)
             ]
         }
       states =
@@ -54,10 +54,16 @@ mirror mapping url =
       eventMailbox =
         Signal.mailbox Nothing
       subscribeTask =
-        mapping.subscribe eventMailbox.address url
+        mappingFunctions.subscribe eventMailbox.address url
+      mappingFunctions =
+        mapping |> getFunctions
   in result
 
-type alias Mapping a =
+type Mapping a =
+  Direct (MappingFunctions a) |
+  Recursive (Lazy (MappingFunctions a))
+
+type alias MappingFunctions a =
   {
     transform: String -> Cache -> Stored a,
     subscribe: Address Event -> String -> HandledTask,
@@ -181,7 +187,7 @@ update event state =
 
 fromDecoder : Decode.Decoder a -> Mapping a
 fromDecoder decoder =
-  {
+  Direct {
     transform =
       decode decoder,
     subscribe =
@@ -266,137 +272,171 @@ unsubscribe url cache =
 (:=) : String -> Mapping a -> Mapping a
 (:=) key mapping =
   let result =
-        {
+        Direct {
           transform = \url cache ->
-            mapping.transform (realUrl url) cache,
+            mappingFunctions.transform (realUrl url) cache,
           subscribe = \address url ->
-            mapping.subscribe address (realUrl url),
+            mappingFunctions.subscribe address (realUrl url),
           unsubscribe = \url cache ->
-            mapping.unsubscribe (realUrl url) cache,
+            mappingFunctions.unsubscribe (realUrl url) cache,
           handle = \address url state ->
-            mapping.handle address url state
+            mappingFunctions.handle address (realUrl url) state
         }
       realUrl = \url ->
         url ++ "/" ++ key
+      mappingFunctions =
+        mapping |> getFunctions
   in result
 
 object1 : (Stored a -> b) -> Mapping a -> Mapping b -- TODO (String, Mapping a) instead of (:=)?
 object1 function mapping =
-  { mapping |
-    transform = \url cache ->
-      mapping.transform url cache |> function |> Ok |> Remote url
-  }
+  let result =
+        Direct { mappingFunctions |
+          transform = \url cache ->
+            mappingFunctions.transform url cache |> function |> Ok |> Remote url
+        }
+      mappingFunctions =
+        mapping |> getFunctions
+  in result
 
 object2 : (Stored a -> Stored b -> c) -> Mapping a -> Mapping b -> Mapping c
 object2 function mappingA mappingB =
-  {
-    transform = \url cache ->
-      let result =
-            function a b |> Ok |> Remote url
-          a =
-            mappingA.transform url cache
-          b =
-            mappingB.transform url cache
-      in result,
-    subscribe = \address url ->
-      TaskUtil.parallel [
-        mappingA.subscribe address url,
-        mappingB.subscribe address url
-      ],
-    unsubscribe = \url cache ->
-      TaskUtil.parallel [
-        mappingA.unsubscribe url cache,
-        mappingB.unsubscribe url cache
-      ],
-    handle = \address url state ->
-      TaskUtil.parallel [
-        mappingA.handle address url state,
-        mappingB.handle address url state
-      ]
-  }
+  let result =
+        Direct {
+          transform = \url cache ->
+            let result =
+                  function a b |> Ok |> Remote url
+                a =
+                  mappingFunctionsA.transform url cache
+                b =
+                  mappingFunctionsB.transform url cache
+            in result,
+          subscribe = \address url ->
+            TaskUtil.parallel [
+              mappingFunctionsA.subscribe address url,
+              mappingFunctionsB.subscribe address url
+            ],
+          unsubscribe = \url cache ->
+            TaskUtil.parallel [
+              mappingFunctionsA.unsubscribe url cache,
+              mappingFunctionsB.unsubscribe url cache
+            ],
+          handle = \address url state ->
+            TaskUtil.parallel [
+              mappingFunctionsA.handle address url state,
+              mappingFunctionsB.handle address url state
+            ]
+        }
+      mappingFunctionsA =
+        mappingA |> getFunctions
+      mappingFunctionsB =
+        mappingB |> getFunctions
+  in result
 
 object3 : (Stored a -> Stored b -> Stored c -> d) -> Mapping a -> Mapping b -> Mapping c -> Mapping d
 object3 function mappingA mappingB mappingC =
-  {
-    transform = \url cache ->
-      let result =
-            function a b c |> Ok |> Remote url
-          a =
-            mappingA.transform url cache
-          b =
-            mappingB.transform url cache
-          c =
-            mappingC.transform url cache
-      in result,
-    subscribe = \address url ->
-      TaskUtil.parallel [
-        mappingA.subscribe address url,
-        mappingB.subscribe address url,
-        mappingC.subscribe address url
-      ],
-    unsubscribe = \url cache ->
-      TaskUtil.parallel [
-        mappingA.unsubscribe url cache,
-        mappingB.unsubscribe url cache,
-        mappingC.unsubscribe url cache
-      ],
-    handle = \address url state ->
-      TaskUtil.parallel [
-        mappingA.handle address url state,
-        mappingB.handle address url state,
-        mappingC.handle address url state
-      ]
-  }
+  let result =
+        Direct {
+          transform = \url cache ->
+            let result =
+                  function a b c |> Ok |> Remote url
+                a =
+                  mappingFunctionsA.transform url cache
+                b =
+                  mappingFunctionsB.transform url cache
+                c =
+                  mappingFunctionsC.transform url cache
+            in result,
+          subscribe = \address url ->
+            TaskUtil.parallel [
+              mappingFunctionsA.subscribe address url,
+              mappingFunctionsB.subscribe address url,
+              mappingFunctionsC.subscribe address url
+            ],
+          unsubscribe = \url cache ->
+            TaskUtil.parallel [
+              mappingFunctionsA.unsubscribe url cache,
+              mappingFunctionsB.unsubscribe url cache,
+              mappingFunctionsC.unsubscribe url cache
+            ],
+          handle = \address url state ->
+            TaskUtil.parallel [
+              mappingFunctionsA.handle address url state,
+              mappingFunctionsB.handle address url state,
+              mappingFunctionsC.handle address url state
+            ]
+        }
+      mappingFunctionsA =
+        mappingA |> getFunctions
+      mappingFunctionsB =
+        mappingB |> getFunctions
+      mappingFunctionsC =
+        mappingC |> getFunctions
+  in result
 
 object4 : (Stored a -> Stored b -> Stored c -> Stored d -> e) -> Mapping a -> Mapping b -> Mapping c -> Mapping d -> Mapping e
 object4 function mappingA mappingB mappingC mappingD =
-  {
-    transform = \url cache ->
-      let result =
-            function a b c d |> Ok |> Remote url
-          a =
-            mappingA.transform url cache
-          b =
-            mappingB.transform url cache
-          c =
-            mappingC.transform url cache
-          d =
-            mappingD.transform url cache
-      in result,
-    subscribe = \address url ->
-      TaskUtil.parallel [
-        mappingA.subscribe address url,
-        mappingB.subscribe address url,
-        mappingC.subscribe address url,
-        mappingD.subscribe address url
-      ],
-    unsubscribe = \url cache ->
-      TaskUtil.parallel [
-        mappingA.unsubscribe url cache,
-        mappingB.unsubscribe url cache,
-        mappingC.unsubscribe url cache,
-        mappingD.unsubscribe url cache
-      ],
-    handle = \address url state ->
-      TaskUtil.parallel [
-        mappingA.handle address url state,
-        mappingB.handle address url state,
-        mappingC.handle address url state,
-        mappingD.handle address url state
-      ]
-  }
+  let result =
+        Direct {
+          transform = \url cache ->
+            let result =
+                  function a b c d |> Ok |> Remote url
+                a =
+                  mappingFunctionsA.transform url cache
+                b =
+                  mappingFunctionsB.transform url cache
+                c =
+                  mappingFunctionsC.transform url cache
+                d =
+                  mappingFunctionsD.transform url cache
+            in result,
+          subscribe = \address url ->
+            TaskUtil.parallel [
+              mappingFunctionsA.subscribe address url,
+              mappingFunctionsB.subscribe address url,
+              mappingFunctionsC.subscribe address url,
+              mappingFunctionsD.subscribe address url
+            ],
+          unsubscribe = \url cache ->
+            TaskUtil.parallel [
+              mappingFunctionsA.unsubscribe url cache,
+              mappingFunctionsB.unsubscribe url cache,
+              mappingFunctionsC.unsubscribe url cache,
+              mappingFunctionsD.unsubscribe url cache
+            ],
+          handle = \address url state ->
+            TaskUtil.parallel [
+              mappingFunctionsA.handle address url state,
+              mappingFunctionsB.handle address url state,
+              mappingFunctionsC.handle address url state,
+              mappingFunctionsD.handle address url state
+            ]
+        }
+      mappingFunctionsA =
+        mappingA |> getFunctions
+      mappingFunctionsB =
+        mappingB |> getFunctions
+      mappingFunctionsC =
+        mappingC |> getFunctions
+      mappingFunctionsD =
+        mappingD |> getFunctions
+  in result
 
 -- TODO up to object8
 
 map : (a -> b) -> Mapping a -> Mapping b
 map function mapping =
-  { mapping |
-    transform = \url cache ->
-      mapping.transform url cache
-      |> mapRemote (\data ->
-        data |> Result.map function
-      )
-  }
+  let result =
+        Direct { mappingFunctions |
+          transform = \url cache ->
+            mappingFunctions.transform url cache
+            |> mapRemote (\data ->
+              data |> Result.map function
+            )
+        }
+      mappingFunctions =
+        mapping |> getFunctions
+  in result
 
 mapRemote : (a -> b) -> Remote a -> Remote b
 mapRemote function remote =
@@ -408,12 +448,12 @@ mapRemote function remote =
 oneOf : Dict String (Mapping a) -> Mapping a
 oneOf mappings =
   let result =
-        {
+        Direct {
           transform = \url cache ->
             let result =
                   storedTypeName `Result.andThen` (\typeName ->
                     (findMapping typeName) `Result.andThen` (\mapping ->
-                      mapping.transform (valueUrl url) cache
+                      (mapping |> getFunctions).transform (valueUrl url) cache
                       |> .data
                     )
                   ) |> Remote url
@@ -426,16 +466,10 @@ oneOf mappings =
                   |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
             in result,
           subscribe = \address url ->
-            TaskUtil.parallel [
-              subscribe address (typeUrl url),
-              subscribe address (valueUrl url)
-            ],
+            subscribe address (typeUrl url),
           unsubscribe = \url cache ->
-            TaskUtil.parallel [
-              unsubscribe (typeUrl url) cache,
-              unsubscribe (valueUrl url) cache
-              -- TODO unsubscribe with current mapping
-            ],
+            unsubscribe (typeUrl url) cache,
+            -- TODO plus unsubscribe with current mapping
           handle = \address url state ->
             let result =
                   TaskUtil.parallel (handleCurrentMapping :: resubscribe)
@@ -453,15 +487,15 @@ oneOf mappings =
                   |> Maybe.withDefault []
                 unsubscribeWithOldMapping =
                   maybeOldMapping |> Maybe.map (\oldMapping ->
-                    oldMapping.unsubscribe (valueUrl url) state.cache
+                    (oldMapping |> getFunctions).unsubscribe (valueUrl url) state.cache
                   ) |> TaskUtil.orDoNothing
                 subscribeWithNewMapping =
                   maybeNewMapping |> Maybe.map (\newMapping ->
-                    newMapping.subscribe address (valueUrl url)
+                    (newMapping |> getFunctions).subscribe address (valueUrl url)
                   ) |> TaskUtil.orDoNothing
                 handleCurrentMapping =
                   maybeNewMapping |> Maybe.map (\newMapping ->
-                    newMapping.handle address (valueUrl url) state
+                    (newMapping |> getFunctions).handle address (valueUrl url) state
                   ) |> TaskUtil.orDoNothing
                 maybeOldMapping =
                   findMapping state.previousCache
@@ -485,6 +519,20 @@ oneOf mappings =
       valueUrl url =
         url ++ "/value"
   in result
+
+recursive : (() -> Mapping a) -> Mapping a
+recursive getMapping =
+  Recursive <| Lazy.lazy (\() ->
+    getMapping () |> getFunctions
+  )
+
+getFunctions : Mapping a -> MappingFunctions a
+getFunctions mapping =
+  case mapping of
+    Direct mappingFunctions ->
+      mappingFunctions
+    Recursive getMappingFunctions ->
+      Lazy.force getMappingFunctions
 
 {-
 reference : Mapping a -> Mapping (Reference a)
