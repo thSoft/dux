@@ -46,7 +46,7 @@ mirror mapping url =
           tasksToRun =
             Signal.mergeMany [
               subscribeTask |> Signal.constant,
-              states |> Signal.map mapping.handle
+              states |> Signal.map (mapping.handle eventMailbox.address url)
             ]
         }
       states =
@@ -62,7 +62,7 @@ type alias Mapping a =
     transform: String -> Cache -> Stored a,
     subscribe: Address Event -> String -> HandledTask,
     unsubscribe: String -> Cache -> HandledTask,
-    handle: State -> HandledTask
+    handle: Address Event -> String -> State -> HandledTask
   }
 
 type alias State =
@@ -85,7 +85,7 @@ type EntryEvent =
   ChildRemoved String
 
 type alias Cache =
-  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry
+  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for disambiguation
 
 type alias Entry =
   {
@@ -188,7 +188,7 @@ fromDecoder decoder =
       subscribe,
     unsubscribe =
       unsubscribe,
-    handle = \_ ->
+    handle = \address url state ->
       Task.succeed ()
   }
 
@@ -273,8 +273,8 @@ unsubscribe url cache =
             mapping.subscribe address (realUrl url),
           unsubscribe = \url cache ->
             mapping.unsubscribe (realUrl url) cache,
-          handle = \state ->
-            mapping.handle state
+          handle = \address url state ->
+            mapping.handle address url state
         }
       realUrl = \url ->
         url ++ "/" ++ key
@@ -308,10 +308,10 @@ object2 function mappingA mappingB =
         mappingA.unsubscribe url cache,
         mappingB.unsubscribe url cache
       ],
-    handle = \state ->
+    handle = \address url state ->
       TaskUtil.parallel [
-        mappingA.handle state,
-        mappingB.handle state
+        mappingA.handle address url state,
+        mappingB.handle address url state
       ]
   }
 
@@ -340,11 +340,11 @@ object3 function mappingA mappingB mappingC =
         mappingB.unsubscribe url cache,
         mappingC.unsubscribe url cache
       ],
-    handle = \state ->
+    handle = \address url state ->
       TaskUtil.parallel [
-        mappingA.handle state,
-        mappingB.handle state,
-        mappingC.handle state
+        mappingA.handle address url state,
+        mappingB.handle address url state,
+        mappingC.handle address url state
       ]
   }
 
@@ -377,12 +377,12 @@ object4 function mappingA mappingB mappingC mappingD =
         mappingC.unsubscribe url cache,
         mappingD.unsubscribe url cache
       ],
-    handle = \state ->
+    handle = \address url state ->
       TaskUtil.parallel [
-        mappingA.handle state,
-        mappingB.handle state,
-        mappingC.handle state,
-        mappingD.handle state
+        mappingA.handle address url state,
+        mappingB.handle address url state,
+        mappingC.handle address url state,
+        mappingD.handle address url state
       ]
   }
 
@@ -420,6 +420,10 @@ oneOf mappings =
                 storedTypeName =
                   decode Decode.string (typeUrl url) cache
                   |> .data
+                findMapping typeName =
+                  mappings
+                  |> Dict.get typeName
+                  |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
             in result,
           subscribe = \address url ->
             TaskUtil.parallel [
@@ -432,29 +436,54 @@ oneOf mappings =
               unsubscribe (valueUrl url) cache
               -- TODO unsubscribe with current mapping
             ],
-          handle = \state ->
+          handle = \address url state ->
             let result =
-                  TaskUtil.parallel [
-                    unsubscribeWithOldMapping,
-                    subscribeWithNewMapping,
-                    handleCurrentMapping
-                  ]
+                  TaskUtil.parallel (handleCurrentMapping :: resubscribe)
+                resubscribe =
+                  state.lastEvent
+                  |> Maybe.map (\remoteEntryEvent ->
+                    if remoteEntryEvent.url == typeUrl url then
+                      [
+                        unsubscribeWithOldMapping,
+                        subscribeWithNewMapping
+                      ]
+                    else
+                      []
+                  )
+                  |> Maybe.withDefault []
                 unsubscribeWithOldMapping =
-                  Task.succeed () -- TODO
+                  maybeOldMapping |> Maybe.map (\oldMapping ->
+                    oldMapping.unsubscribe (valueUrl url) state.cache
+                  ) |> TaskUtil.orDoNothing
                 subscribeWithNewMapping =
-                  Task.succeed () -- TODO
+                  maybeNewMapping |> Maybe.map (\newMapping ->
+                    newMapping.subscribe address (valueUrl url)
+                  ) |> TaskUtil.orDoNothing
                 handleCurrentMapping =
-                  Task.succeed () -- TODO
+                  maybeNewMapping |> Maybe.map (\newMapping ->
+                    newMapping.handle address (valueUrl url) state
+                  ) |> TaskUtil.orDoNothing
+                maybeOldMapping =
+                  findMapping state.previousCache
+                maybeNewMapping =
+                  findMapping state.cache
+                findMapping cache =
+                  (cache |> Dict.get (typeUrl url))
+                  `Maybe.andThen` .maybeValue
+                  `Maybe.andThen` (\value ->
+                    value
+                    |> Decode.decodeValue Decode.string
+                    |> Result.toMaybe
+                  )
+                  `Maybe.andThen` (\typeName ->
+                    mappings |> Dict.get typeName
+                  )
             in result
         }
       typeUrl url =
         url ++ "/type"
       valueUrl url =
         url ++ "/value"
-      findMapping typeName =
-        mappings
-        |> Dict.get typeName
-        |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
   in result
 
 {-
