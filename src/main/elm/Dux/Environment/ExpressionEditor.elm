@@ -1,28 +1,46 @@
 module Dux.Environment.ExpressionEditor where
 
+import String
+import Dict
 import Signal exposing (Address)
 import Html exposing (Html)
+import Html.Attributes as Attributes
 import Json.Decode as Decode exposing ((:=))
+import Json.Encode as Encode
 import ElmFire exposing (Location)
 import DecodeUtil
 import TaskUtil exposing (HandledTask)
 import Component exposing (Component, Update)
+import StructuralEditor.Combobox as Combobox
 import StructuralEditor.Editor as Editor exposing (Editor)
+import StructuralEditor.Styles as Styles
 import Dux.Environment.NumberLiteralEditor as NumberLiteralEditor
 import Dux.Environment.FunctionTypeEditor as FunctionTypeEditor
 
 -- Expression
 
+-- TODO clear left/right combobox input text on submit
+-- TODO state change not handled: number literal -> function call in function call, function call -> number literal
+
 type alias ExpressionEditor =
   Editor Model
 
-type Model =
+type alias Model =
+  {
+    main: MainModel,
+    left: Combobox.Model,
+    right: Combobox.Model
+  }
+
+type MainModel =
   NumberLiteral (Editor NumberLiteralEditor.Model) |
   FunctionCall (Editor FunctionCallEditorModel)
 
 type Action =
   NumberLiteralAction (Editor.Action NumberLiteralEditor.Action) |
-  FunctionCallAction (Editor.Action FunctionCallEditorAction)
+  FunctionCallAction (Editor.Action FunctionCallEditorAction) |
+  LeftAction Combobox.Action |
+  RightAction Combobox.Action
 
 component : Location -> Component ExpressionEditor (Editor.Action Action)
 component location =
@@ -40,16 +58,29 @@ component location =
 init : Location -> Address (Editor.Action Action) -> Update (Editor Model)
 init location address =
   let result =
-        { initEditor | task = task }
+        Component.returnAndRun initEditor.model task
+      initEditor =
+        Editor.init model location address
+      model =
+        {
+          main =
+            initMain.model |> NumberLiteral,
+          left =
+            initLeft,
+          right =
+            initRight
+        }
       task =
         [
-          initNumberLiteral.task,
-          initEditor.task
+          initEditor.task,
+          initMain.task
         ] |> TaskUtil.parallel
-      initEditor =
-        Editor.init (initNumberLiteral.model |> NumberLiteral) location address
-      initNumberLiteral =
+      initMain =
         NumberLiteralEditor.init location (address `Signal.forwardTo` (NumberLiteralAction >> Editor.CustomAction))
+      initLeft =
+        Combobox.init ""
+      initRight =
+        Combobox.init ""
   in result
 
 update : Address (Editor.Action Action) -> Editor.Action Action -> Editor Model -> Update (Editor Model)
@@ -68,47 +99,75 @@ updateContext =
       customAction address action editor =
         case action of
           NumberLiteralAction numberLiteralAction ->
-            case editor.model of
+            case editor.model.main of
               NumberLiteral numberLiteral ->
                 let result =
                       Component.returnAndRun
                         { editor | model = updatedModel }
-                        task
+                        updateNumberLiteral.task
                     updatedModel =
-                      updateNumberLiteral.model |> NumberLiteral
-                    task =
-                      updateNumberLiteral.task
+                      { model | main = updateNumberLiteral.model |> NumberLiteral }
+                    model =
+                      editor.model
                     updateNumberLiteral =
                       NumberLiteralEditor.update (address `Signal.forwardTo` NumberLiteralAction) numberLiteralAction numberLiteral
                 in result
               _ ->
                 Component.return editor
           FunctionCallAction functionCallAction ->
-            case editor.model of
+            case editor.model.main of
               FunctionCall functionCall ->
                 let result =
                       Component.returnAndRun
                         { editor | model = updatedModel }
-                        task
+                        updateFunctionCall.task
                     updatedModel =
-                      updateFunctionCall.model |> FunctionCall
-                    task =
-                      updateFunctionCall.task
+                      { model | main = updateFunctionCall.model |> FunctionCall }
+                    model =
+                      editor.model
                     updateFunctionCall =
                       functionCallEditorUpdate (address `Signal.forwardTo` FunctionCallAction) functionCallAction functionCall
                 in result
               _ ->
                 Component.return editor
+          LeftAction leftAction ->
+            let result =
+                  Component.returnAndRun
+                    { editor | model = updatedModel }
+                    updateLeft.task
+                updatedModel =
+                  { model | left = updateLeft.model }
+                model =
+                  editor.model
+                updateLeft =
+                  Combobox.update leftAction editor.model.left
+            in result
+          RightAction rightAction ->
+            let result =
+                  Component.returnAndRun
+                    { editor | model = updatedModel }
+                    updateRight.task
+                updatedModel =
+                  { model | right = updateRight.model }
+                model =
+                  editor.model
+                updateRight =
+                  Combobox.update rightAction editor.model.right
+            in result
       valueChanged address snapshot editor =
         if snapshot.value |> NumberLiteralEditor.isValid then
-          case editor.model of
+          case editor.model.main of
             NumberLiteral numberLiteralEditor ->
               Component.return editor
             FunctionCall functionCallEditor ->
               let result =
                     Component.returnAndRun
-                      { editor | model = initNumberLiteral.model |> NumberLiteral }
+                      { editor | model = updatedModel }
                       task
+                  updatedModel =
+                    { model | main = initNumberLiteral.model |> NumberLiteral }
+                  model =
+                    editor.model
                   task =
                     [
                       initNumberLiteral.task,
@@ -118,14 +177,18 @@ updateContext =
                     NumberLiteralEditor.init editor.location (address `Signal.forwardTo` NumberLiteralAction)
               in result
         else if snapshot.value |> functionCallEditorIsValid then
-          case editor.model of
+          case editor.model.main of
             FunctionCall functionCallEditor ->
               Component.return editor
             NumberLiteral numberLiteralEditor ->
               let result =
                     Component.returnAndRun
-                      { editor | model = initFunctionCall.model |> FunctionCall }
+                      { editor | model = updatedModel }
                       task
+                  updatedModel =
+                    { model | main = initFunctionCall.model |> FunctionCall }
+                  model =
+                    editor.model
                   task =
                     [
                       initFunctionCall.task,
@@ -146,12 +209,81 @@ viewContext : Editor.ViewContext Model Action
 viewContext =
   {
     view = \focused address editor ->
-      case editor.model of
-        NumberLiteral numberLiteral ->
-          NumberLiteralEditor.view focused (address `Signal.forwardTo` NumberLiteralAction) numberLiteral
-        FunctionCall functionCall ->
-          functionCallEditorView focused (address `Signal.forwardTo` FunctionCallAction) functionCall
+      let result =
+            Html.div
+              [Styles.bordered "lightGray" |> Attributes.style]
+              children
+          children =
+            [
+              viewLeft,
+              viewMain,
+              viewRight
+            ]
+          viewMain =
+            case editor.model.main of
+              NumberLiteral numberLiteral ->
+                NumberLiteralEditor.view focused (address `Signal.forwardTo` NumberLiteralAction) numberLiteral
+              FunctionCall functionCall ->
+                functionCallEditorView focused (address `Signal.forwardTo` FunctionCallAction) functionCall
+          viewLeft =
+            Combobox.view leftContext (address `Signal.forwardTo` LeftAction) editor.model.left
+          leftContext =
+            comboboxContext False editor.location editor.model.left
+          viewRight =
+            Combobox.view rightContext (address `Signal.forwardTo` RightAction) editor.model.right
+          rightContext =
+            comboboxContext True editor.location editor.model.right
+      in result
   }
+
+comboboxContext : Bool -> Location -> Combobox.Model -> Combobox.Context
+comboboxContext right location comboboxModel =
+  {
+    inputText =
+      "",
+    commands =
+      FunctionTypeEditor.types
+      |> Dict.toList
+      |> List.filter (\(name, _) ->
+        name |> String.contains comboboxModel.inputText
+      )
+      |> List.map (\(name, functionType) ->
+        {
+          label =
+            functionType |> toString,
+          task =
+            surroundWith False location name
+        }
+      ),
+    style =
+      Combobox.ContentEditable,
+    extraAttributes =
+      []
+  }
+
+surroundWith : Bool -> Location -> String -> HandledTask
+surroundWith right location functionTypeName =
+  ElmFire.transaction
+    (\maybeValue ->
+      case maybeValue of
+        Nothing ->
+          ElmFire.Abort
+        Just value ->
+          [
+            (firstArgumentField, if right then defaultExpressionValue else value),
+            (functionTypeField, functionTypeName |> Encode.string),
+            (secondArgumentField, if right then value else defaultExpressionValue)
+          ]
+          |> Encode.object
+          |> ElmFire.Set
+    )
+    location
+    False
+  |> TaskUtil.swallowError "ElmFire.transaction failed"
+
+defaultExpressionValue : Decode.Value
+defaultExpressionValue =
+  1 |> Encode.int
 
 decoder : Decode.Decoder Bool
 decoder =
