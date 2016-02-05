@@ -5,7 +5,7 @@ import Debug
 import Dict exposing (Dict)
 import Signal exposing (Address)
 import ElmFire exposing (Location, Subscription, Snapshot, Cancellation(..), ErrorType(..), Priority(..))
-import TaskUtil
+import TaskUtil exposing (HandledTask)
 import Component exposing (Update)
 
 type alias Editor model =
@@ -92,7 +92,7 @@ init initialModel location address =
         |> TaskUtil.onError (TaskUtil.notify address (Err >> (SubscriptionResult eventType)))
   in result
 
-done : Editor model -> Component.HandledTask
+done : Editor model -> HandledTask
 done editor =
   editor.subscriptions
   |> Dict.values

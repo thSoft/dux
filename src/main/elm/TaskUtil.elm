@@ -5,6 +5,18 @@ import Task exposing (Task)
 import Debug
 import Task.Extra
 
+{-} A convenient alias for a task where the 'real' result and error have been
+handled. The 'tuple 0' () is a convenient terminating type because the result
+and error will often be dealt with using something like:
+
+    actualTask
+    `andThen` notify address HandleResult
+    `onError` notify address HandleError
+
+... which, given the return type of `notify`, will produce a Task () ()
+-}
+type alias HandledTask = Task () ()
+
 andThen : (a -> Task x b) -> Task x a -> Task x b
 andThen =
   flip Task.andThen

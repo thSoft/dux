@@ -6,6 +6,7 @@ import Html exposing (Html)
 import Task exposing (Task)
 import Maybe
 import Signal exposing (Address)
+import TaskUtil exposing (HandledTask)
 
 -- Note that the original StartApp uses `Task Never ()` in an attempt to force
 -- callers to deal explicitly with error conditions. However, it is doubtful
@@ -13,19 +14,6 @@ import Signal exposing (Address)
 -- deal with error conditions -- and, do so silently. Also, it seems awkward
 -- to force the error handling through the Task's success case -- we have
 -- success and failure paths in Task for a reason, after all.
-
-{-} A convenient alias for a task where the 'real' result and error have been
-handled. The 'tuple 0' () is a convenient terminating type because the result
-and error will often be dealt with using something like:
-
-    actualTask
-    `andThen` notify address HandleResult
-    `onError` notify address HandleError
-
-... which, given the return type of `notify`, will produce a Task () ()
--}
-type alias HandledTask = Task () ()
-
 
 {-| An `Output` is made up of a couple signals:
 

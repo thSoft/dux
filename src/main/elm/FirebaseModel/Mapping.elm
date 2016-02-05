@@ -4,9 +4,9 @@ import Dict exposing (Dict)
 import Signal exposing (Address)
 import Json.Decode as Decode
 import Task
-import TaskUtil
+import Lazy exposing (Lazy)
+import TaskUtil exposing (HandledTask)
 import ElmFire
-import Component exposing (Update, HandledTask)
 
 type alias Stored a =
   Remote (Result Error a)

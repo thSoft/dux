@@ -5,7 +5,7 @@ import Html exposing (Html)
 import Json.Decode as Decode exposing ((:=))
 import ElmFire exposing (Location)
 import DecodeUtil
-import TaskUtil
+import TaskUtil exposing (HandledTask)
 import Component exposing (Component, Update)
 import StructuralEditor.Editor as Editor exposing (Editor)
 import Dux.Environment.NumberLiteralEditor as NumberLiteralEditor
