@@ -86,9 +86,7 @@ type EntryEvent =
   Unsubscribed |
   SubscriptionFailed ElmFire.Error |
   Cancelled ElmFire.Cancellation |
-  ValueChanged Decode.Value |
-  ChildAdded String |
-  ChildRemoved String
+  ValueChanged Decode.Value
 
 type alias Cache =
   Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for disambiguation
@@ -110,15 +108,6 @@ initialState =
       Nothing
   }
 
-updateCache : Event -> (Cache -> Cache) -> State -> State
-updateCache lastEvent transform state =
-  { state |
-    cache =
-      state.cache |> transform,
-    lastEvent =
-      lastEvent
-  }
-
 update : Event -> State -> State
 update event state =
   case event of
@@ -127,61 +116,95 @@ update event state =
     Just remoteEntryEvent ->
       case remoteEntryEvent.data of
         Subscribed subscription ->
-          state |> updateCache event (\cache ->
-            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
-              case maybeEntry of
-                Nothing ->
-                  Just {
-                    maybeValue =
-                      Nothing,
-                    subscription =
-                      Ok subscription
-                  }
-                Just entry ->
-                  Just { entry |
-                    subscription =
-                      Ok subscription
-                  }
-            )
-          )
+          state |> updateEntry
+            event
+            remoteEntryEvent.url
+            FieldSubscription
+            {
+              maybeValue =
+                Nothing,
+              subscription =
+                Ok subscription
+            }
         Unsubscribed ->
-          state |> updateCache event (\cache ->
-            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
-              case maybeEntry of
-                Nothing ->
-                  Just {
-                    maybeValue =
-                      Nothing,
-                    subscription =
-                      Err NoSubscription
-                  }
-                Just entry ->
-                  Just { entry |
-                    subscription =
-                      Err NoSubscription
-                  }
-            )
-          )
+          state |> updateEntry
+            event
+            remoteEntryEvent.url
+            FieldSubscription
+            {
+              maybeValue =
+                Nothing,
+              subscription =
+                Err NoSubscription
+            }
+        SubscriptionFailed error ->
+          state |> updateEntry
+            event
+            remoteEntryEvent.url
+            FieldSubscription
+            {
+              maybeValue =
+                Nothing,
+              subscription =
+                Err <| ElmFireError error
+            }
+        Cancelled cancellation ->
+          state |> updateEntry
+            event
+            remoteEntryEvent.url
+            FieldSubscription
+            {
+              maybeValue =
+                Nothing,
+              subscription =
+                Err <| ElmFireCancellation cancellation
+            }
         ValueChanged value ->
-          state |> updateCache event (\cache ->
-            cache |> Dict.update remoteEntryEvent.url (\maybeEntry ->
-              case maybeEntry of
-                Nothing ->
-                  Just {
-                    maybeValue =
-                      Just value,
-                    subscription =
-                      Err NoSubscription
-                  }
-                Just entry ->
-                  Just { entry |
-                    maybeValue =
-                      Just value
-                  }
-            )
-          )
-        _ ->
-          state
+          state |> updateEntry
+            event
+            remoteEntryEvent.url
+            FieldMaybeValue
+            {
+              maybeValue =
+                Just value,
+              subscription =
+                Err NoSubscription
+            }
+
+type EntryField =
+  FieldMaybeValue |
+  FieldSubscription
+
+updateEntry : Event -> String -> EntryField -> Entry -> State -> State
+updateEntry event url entryField newEntry state =
+  state |> updateCache event (\cache ->
+    cache |> Dict.update url (\maybeEntry ->
+      case maybeEntry of
+        Nothing ->
+          Just newEntry
+        Just entry ->
+          Just <| case entryField of
+            FieldMaybeValue ->
+              { entry |
+                maybeValue =
+                  newEntry.maybeValue
+              }
+            FieldSubscription ->
+              { entry |
+                subscription =
+                  newEntry.subscription
+              }
+    )
+  )
+
+updateCache : Event -> (Cache -> Cache) -> State -> State
+updateCache lastEvent transform state =
+  { state |
+    cache =
+      state.cache |> transform,
+    lastEvent =
+      lastEvent
+  }
 
 -- Mappings
 
@@ -468,8 +491,12 @@ oneOf mappings =
           subscribe = \address url ->
             subscribe address (typeUrl url),
           unsubscribe = \url cache ->
-            unsubscribe (typeUrl url) cache,
-            -- TODO plus unsubscribe with current mapping
+            TaskUtil.parallel [
+              unsubscribe (typeUrl url) cache,
+              findMapping cache url |> Maybe.map (\mapping ->
+                (mapping |> getFunctions).unsubscribe (valueUrl url) cache
+              ) |> TaskUtil.orDoNothing
+            ],
           handle = \address url state ->
             let result =
                   TaskUtil.parallel (handleCurrentMapping :: resubscribe)
@@ -498,26 +525,26 @@ oneOf mappings =
                     (newMapping |> getFunctions).handle address (valueUrl url) state
                   ) |> TaskUtil.orDoNothing
                 maybeOldMapping =
-                  findMapping state.previousCache
+                  findMapping state.previousCache url
                 maybeNewMapping =
-                  findMapping state.cache
-                findMapping cache =
-                  (cache |> Dict.get (typeUrl url))
-                  `Maybe.andThen` .maybeValue
-                  `Maybe.andThen` (\value ->
-                    value
-                    |> Decode.decodeValue Decode.string
-                    |> Result.toMaybe
-                  )
-                  `Maybe.andThen` (\typeName ->
-                    mappings |> Dict.get typeName
-                  )
+                  findMapping state.cache url
             in result
         }
       typeUrl url =
         url ++ "/type"
       valueUrl url =
         url ++ "/value"
+      findMapping cache url =
+        (cache |> Dict.get (typeUrl url))
+        `Maybe.andThen` .maybeValue
+        `Maybe.andThen` (\value ->
+          value
+          |> Decode.decodeValue Decode.string
+          |> Result.toMaybe
+        )
+        `Maybe.andThen` (\typeName ->
+          mappings |> Dict.get typeName
+        )
   in result
 
 recursive : (() -> Mapping a) -> Mapping a
