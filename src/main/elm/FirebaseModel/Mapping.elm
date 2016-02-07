@@ -71,11 +71,28 @@ type alias MappingFunctions a =
     handle: Address Event -> String -> State -> HandledTask
   }
 
+getFunctions : Mapping a -> MappingFunctions a
+getFunctions mapping =
+  case mapping of
+    Direct mappingFunctions ->
+      mappingFunctions
+    Recursive getMappingFunctions ->
+      Lazy.force getMappingFunctions
+
 type alias State =
   {
     cache: Cache,
     previousCache: Cache,
     lastEvent: Event
+  }
+
+type alias Cache =
+  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for disambiguation
+
+type alias Entry =
+  {
+    maybeValue: Maybe Decode.Value,
+    subscription: Result SubscriptionError ElmFire.Subscription
   }
 
 type alias Event =
@@ -87,15 +104,6 @@ type EntryEvent =
   SubscriptionFailed ElmFire.Error |
   Cancelled ElmFire.Cancellation |
   ValueChanged Decode.Value
-
-type alias Cache =
-  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for disambiguation
-
-type alias Entry =
-  {
-    maybeValue: Maybe Decode.Value,
-    subscription: Result SubscriptionError ElmFire.Subscription
-  }
 
 initialState : State
 initialState =
@@ -493,7 +501,7 @@ oneOf mappings =
           unsubscribe = \url cache ->
             TaskUtil.parallel [
               unsubscribe (typeUrl url) cache,
-              findMapping cache url |> Maybe.map (\mapping ->
+              findMapping url cache |> Maybe.map (\mapping ->
                 (mapping |> getFunctions).unsubscribe (valueUrl url) cache
               ) |> TaskUtil.orDoNothing
             ],
@@ -503,7 +511,7 @@ oneOf mappings =
                 resubscribe =
                   state.lastEvent
                   |> Maybe.map (\remoteEntryEvent ->
-                    if remoteEntryEvent.url == typeUrl url then
+                    if remoteEntryEvent |> valueChangedAt (typeUrl url) then
                       [
                         unsubscribeWithOldMapping,
                         subscribeWithNewMapping
@@ -525,23 +533,17 @@ oneOf mappings =
                     (newMapping |> getFunctions).handle address (valueUrl url) state
                   ) |> TaskUtil.orDoNothing
                 maybeOldMapping =
-                  findMapping state.previousCache url
+                  findMapping url state.previousCache
                 maybeNewMapping =
-                  findMapping state.cache url
+                  findMapping url state.cache
             in result
         }
       typeUrl url =
         url ++ "/type"
       valueUrl url =
         url ++ "/value"
-      findMapping cache url =
-        (cache |> Dict.get (typeUrl url))
-        `Maybe.andThen` .maybeValue
-        `Maybe.andThen` (\value ->
-          value
-          |> Decode.decodeValue Decode.string
-          |> Result.toMaybe
-        )
+      findMapping url cache =
+        (decode Decode.string (typeUrl url) cache |> .data |> Result.toMaybe)
         `Maybe.andThen` (\typeName ->
           mappings |> Dict.get typeName
         )
@@ -553,21 +555,89 @@ recursive getMapping =
     getMapping () |> getFunctions
   )
 
-getFunctions : Mapping a -> MappingFunctions a
-getFunctions mapping =
-  case mapping of
-    Direct mappingFunctions ->
-      mappingFunctions
-    Recursive getMappingFunctions ->
-      Lazy.force getMappingFunctions
-
-{-
-reference : Mapping a -> Mapping (Reference a)
-
 type alias Reference a =
   {
     get: () -> Stored a
   }
 
+reference : Mapping a -> Mapping (Reference a)
+reference mapping =
+  let result =
+        Direct {
+          transform = \url cache ->
+            let result =
+                  decode Decode.string url cache
+                  |> .data
+                  |> Result.map (\referenceUrl ->
+                    {
+                      get = \() ->
+                        mappingFunctions.transform referenceUrl cache
+                    }
+                  ) |> Remote url
+            in result,
+          subscribe =
+            subscribe,
+          unsubscribe = \url cache ->
+            let result =
+                  TaskUtil.parallel [
+                    unsubscribe url cache,
+                    getReferenceUrl url cache |> Maybe.map (\referenceUrl ->
+                      mappingFunctions.unsubscribe referenceUrl cache
+                    ) |> TaskUtil.orDoNothing
+                  ]
+            in result,
+          handle = \address url state ->
+            let result =
+                  TaskUtil.parallel (handleMapping :: resubscribe)
+                resubscribe =
+                  state.lastEvent
+                  |> Maybe.map (\remoteEntryEvent ->
+                    if remoteEntryEvent |> valueChangedAt url then
+                      [
+                        unsubscribeOldUrl,
+                        subscribeNewUrl
+                      ]
+                    else
+                      []
+                  )
+                  |> Maybe.withDefault []
+                unsubscribeOldUrl =
+                  maybeOldUrl |> Maybe.map (\oldUrl ->
+                    mappingFunctions.unsubscribe oldUrl state.previousCache
+                  ) |> TaskUtil.orDoNothing
+                subscribeNewUrl =
+                  maybeNewUrl |> Maybe.map (\newUrl ->
+                    mappingFunctions.subscribe address newUrl
+                  ) |> TaskUtil.orDoNothing
+                maybeOldUrl =
+                  getReferenceUrl url state.previousCache
+                maybeNewUrl =
+                  getReferenceUrl url state.cache
+                handleMapping =
+                  maybeNewUrl |> Maybe.map (\newUrl ->
+                    mappingFunctions.handle address newUrl state
+                  ) |> TaskUtil.orDoNothing
+            in result
+        }
+      mappingFunctions =
+        mapping |> getFunctions
+      getReferenceUrl url cache =
+        decode Decode.string url cache
+        |> .data
+        |> Result.toMaybe
+  in result
+
+valueChangedAt : String -> Remote EntryEvent -> Bool
+valueChangedAt url remoteEntryEvent =
+  if remoteEntryEvent.url == url then
+    case remoteEntryEvent.data of
+      ValueChanged _ ->
+        True
+      _ ->
+        False
+  else
+    False
+
+{-
 list : Mapping a -> Mapping (List a)
 -}
