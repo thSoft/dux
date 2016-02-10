@@ -16,7 +16,9 @@ viewWorkspace  workspace =
 
 viewExpressionView : ExpressionView -> Html
 viewExpressionView expressionView =
-  expressionView.expression |> viewStored (viewReference (viewStored viewExpression))
+  div
+    []
+    [expressionView.expression |> viewStored (viewReference (viewStored viewExpression))]
 
 viewStored : (a -> Html) -> Stored a -> Html
 viewStored view stored =
@@ -61,9 +63,9 @@ viewStored view stored =
                       NoSubscription ->
                         "Not subscribed to " ++ stored.url
                       ElmFireError elmFireError ->
-                        "Subscription failed to " ++ stored.url ++ ": " ++ (elmFireError |> toString)
+                        "Subscription to " ++ stored.url ++ " failed: " ++ (elmFireError |> toString)
                       ElmFireCancellation cancellation ->
-                        "Subscription cancelled " ++ stored.url ++ ": " ++ (cancellation |> toString)
+                        "Subscription to " ++ stored.url ++ " cancelled: " ++ (cancellation |> toString)
               in result
     ]
 
