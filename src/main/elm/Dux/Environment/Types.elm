@@ -1,11 +1,11 @@
 module Dux.Environment.Types where
 
-import FirebaseModel.Mapping exposing (Reference, Stored)
+import FirebaseModel.Mapping exposing (Stored, Reference, Many)
 import Dux.Language.Types exposing (..)
 
 type alias Workspace =
   {
-    views: List ExpressionView
+    views: Stored (Many ExpressionView)
   }
 
 type alias ExpressionView =

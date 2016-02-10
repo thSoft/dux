@@ -1,5 +1,6 @@
 module FirebaseModel.Mapping where
 
+import Set
 import Dict exposing (Dict)
 import Signal exposing (Address)
 import Json.Decode as Decode
@@ -87,11 +88,11 @@ type alias State =
   }
 
 type alias Cache =
-  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for disambiguation
+  Dict String Entry -- TODO List Entry and include location (instead of url) and mapping in Entry for unique identification
 
 type alias Entry =
   {
-    maybeValue: Maybe Decode.Value,
+    maybeValue: Maybe Decode.Value, -- encoded List String for list entries
     subscription: Result SubscriptionError ElmFire.Subscription
   }
 
@@ -128,80 +129,84 @@ update event state =
             event
             remoteEntryEvent.url
             FieldSubscription
-            {
+            (always {
               maybeValue =
                 Nothing,
               subscription =
                 Ok subscription
-            }
+            })
         Unsubscribed ->
           state |> updateEntry
             event
             remoteEntryEvent.url
             FieldSubscription
-            {
+            (always {
               maybeValue =
                 Nothing,
               subscription =
                 Err NoSubscription
-            }
+            })
         SubscriptionFailed error ->
           state |> updateEntry
             event
             remoteEntryEvent.url
             FieldSubscription
-            {
+            (always {
               maybeValue =
                 Nothing,
               subscription =
                 Err <| ElmFireError error
-            }
+            })
         Cancelled cancellation ->
           state |> updateEntry
             event
             remoteEntryEvent.url
             FieldSubscription
-            {
+            (always {
               maybeValue =
                 Nothing,
               subscription =
                 Err <| ElmFireCancellation cancellation
-            }
+            })
         ValueChanged value ->
           state |> updateEntry
             event
             remoteEntryEvent.url
             FieldMaybeValue
-            {
+            (always {
               maybeValue =
                 Just value,
               subscription =
                 Err NoSubscription
-            }
+            })
 
 type EntryField =
   FieldMaybeValue |
   FieldSubscription
 
-updateEntry : Event -> String -> EntryField -> Entry -> State -> State
-updateEntry event url entryField newEntry state =
+updateEntry : Event -> String -> EntryField -> (Maybe Entry -> Entry) -> State -> State
+updateEntry event url entryField getNewEntry state =
   state |> updateCache event (\cache ->
     cache |> Dict.update url (\maybeEntry ->
-      case maybeEntry of
-        Nothing ->
-          Just newEntry
-        Just entry ->
-          Just <| case entryField of
-            FieldMaybeValue ->
-              { entry |
-                maybeValue =
-                  newEntry.maybeValue
-              }
-            FieldSubscription ->
-              { entry |
-                subscription =
-                  newEntry.subscription
-              }
+      let result =
+            case maybeEntry of
+              Nothing ->
+                Just newEntry
+              Just entry ->
+                Just <| case entryField of
+                  FieldMaybeValue ->
+                    { entry |
+                      maybeValue =
+                        newEntry.maybeValue
+                    }
+                  FieldSubscription ->
+                    { entry |
+                      subscription =
+                        newEntry.subscription
+                    }
+          newEntry =
+            getNewEntry maybeEntry
+      in result
     )
   )
 
@@ -265,14 +270,14 @@ subscribe address url =
       task =
         ElmFire.subscribe
           (\snapshot ->
-            snapshotEvent snapshot
+            ValueChanged snapshot.value
             |> sendEvent
           )
           (\cancellation ->
             Cancelled cancellation
             |> sendEvent
           )
-          (query ElmFire.noOrder)
+          (ElmFire.valueChanged ElmFire.noOrder)
           (ElmFire.fromUrl url)
       sendEvent entryEvent =
         Just {
@@ -282,10 +287,6 @@ subscribe address url =
             entryEvent
         }
         |> Signal.send address
-      snapshotEvent snapshot =
-        ValueChanged snapshot.value
-      query =
-        ElmFire.valueChanged
   in result
 
 unsubscribe : String -> Cache -> HandledTask
@@ -313,13 +314,13 @@ unsubscribe url cache =
           handle = \address url state ->
             mappingFunctions.handle address (realUrl url) state
         }
-      realUrl = \url ->
-        url ++ "/" ++ key
       mappingFunctions =
         mapping |> getFunctions
+      realUrl = \url ->
+        url `appendUrl` key
   in result
 
-object1 : (Stored a -> b) -> Mapping a -> Mapping b -- TODO (String, Mapping a) instead of (:=)?
+object1 : (Stored a -> b) -> Mapping a -> Mapping b
 object1 function mapping =
   let result =
         Direct { mappingFunctions |
@@ -482,26 +483,19 @@ oneOf mappings =
         Direct {
           transform = \url cache ->
             let result =
-                  storedTypeName `Result.andThen` (\typeName ->
-                    (findMapping typeName) `Result.andThen` (\mapping ->
-                      (mapping |> getFunctions).transform (valueUrl url) cache
-                      |> .data
-                    )
+                  (findMapping url cache) `Result.andThen` (\mapping ->
+                    (mapping |> getFunctions).transform (valueUrl url) cache
+                    |> .data
                   ) |> Remote url
-                storedTypeName =
-                  decode Decode.string (typeUrl url) cache
-                  |> .data
-                findMapping typeName =
-                  mappings
-                  |> Dict.get typeName
-                  |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
             in result,
           subscribe = \address url ->
             subscribe address (typeUrl url),
           unsubscribe = \url cache ->
             TaskUtil.parallel [
               unsubscribe (typeUrl url) cache,
-              findMapping url cache |> Maybe.map (\mapping ->
+              findMapping url cache
+              |> Result.toMaybe
+              |> Maybe.map (\mapping ->
                 (mapping |> getFunctions).unsubscribe (valueUrl url) cache
               ) |> TaskUtil.orDoNothing
             ],
@@ -533,9 +527,9 @@ oneOf mappings =
                     (newMapping |> getFunctions).handle address (valueUrl url) state
                   ) |> TaskUtil.orDoNothing
                 maybeOldMapping =
-                  findMapping url state.previousCache
+                  findMapping url state.previousCache |> Result.toMaybe
                 maybeNewMapping =
-                  findMapping url state.cache
+                  findMapping url state.cache |> Result.toMaybe
             in result
         }
       typeUrl url =
@@ -543,9 +537,9 @@ oneOf mappings =
       valueUrl url =
         url ++ "/value"
       findMapping url cache =
-        (decode Decode.string (typeUrl url) cache |> .data |> Result.toMaybe)
-        `Maybe.andThen` (\typeName ->
-          mappings |> Dict.get typeName
+        (decode Decode.string (typeUrl url) cache |> .data)
+        `Result.andThen` (\typeName ->
+          mappings |> Dict.get typeName |> Result.fromMaybe (DecodingError <| "Unknown mapping: " ++ typeName)
         )
   in result
 
@@ -566,8 +560,7 @@ reference mapping =
         Direct {
           transform = \url cache ->
             let result =
-                  decode Decode.string url cache
-                  |> .data
+                  getReferenceUrl url cache
                   |> Result.map (\referenceUrl ->
                     {
                       get = \() ->
@@ -581,7 +574,9 @@ reference mapping =
             let result =
                   TaskUtil.parallel [
                     unsubscribe url cache,
-                    getReferenceUrl url cache |> Maybe.map (\referenceUrl ->
+                    getReferenceUrl url cache
+                    |> Result.toMaybe
+                    |> Maybe.map (\referenceUrl ->
                       mappingFunctions.unsubscribe referenceUrl cache
                     ) |> TaskUtil.orDoNothing
                   ]
@@ -610,9 +605,9 @@ reference mapping =
                     mappingFunctions.subscribe address newUrl
                   ) |> TaskUtil.orDoNothing
                 maybeOldUrl =
-                  getReferenceUrl url state.previousCache
+                  getReferenceUrl url state.previousCache |> Result.toMaybe
                 maybeNewUrl =
-                  getReferenceUrl url state.cache
+                  getReferenceUrl url state.cache |> Result.toMaybe
                 handleMapping =
                   maybeNewUrl |> Maybe.map (\newUrl ->
                     mappingFunctions.handle address newUrl state
@@ -624,7 +619,6 @@ reference mapping =
       getReferenceUrl url cache =
         decode Decode.string url cache
         |> .data
-        |> Result.toMaybe
   in result
 
 valueChangedAt : String -> Remote EntryEvent -> Bool
@@ -638,6 +632,74 @@ valueChangedAt url remoteEntryEvent =
   else
     False
 
-{-
-list : Mapping a -> Mapping (List a)
--}
+type alias Many a =
+  List (Stored a)
+
+many : Mapping a -> Mapping (Many a)
+many mapping =
+  let result =
+        Direct {
+          transform = \url cache ->
+            let result =
+                  getChildren url cache
+                  |> Result.map (\keys ->
+                    keys
+                    |> List.map (\key ->
+                      mappingFunctions.transform (url `appendUrl` key) cache
+                    )
+                  )
+                  |> Remote url
+            in result,
+          subscribe =
+            subscribe,
+          unsubscribe =
+            unsubscribe,
+          handle = \address url state ->
+            let result =
+                  TaskUtil.parallel (resubscribe ++ handleChildren)
+                resubscribe =
+                  state.lastEvent
+                  |> Maybe.map (\remoteEntryEvent ->
+                    if remoteEntryEvent |> valueChangedAt url then
+                      unsubscribeRemovedChildren ++ subscribeAddedChildren
+                    else
+                      []
+                  )
+                  |> Maybe.withDefault []
+                unsubscribeRemovedChildren =
+                  removedChildren |> List.map unsubscribeOldChild
+                subscribeAddedChildren =
+                  addedChildren |> List.map subscribeNewChild
+                removedChildren =
+                  Set.diff previousChildren children |> Set.toList
+                addedChildren =
+                  Set.diff children previousChildren |> Set.toList
+                previousChildren =
+                  getChildrenList state.previousCache |> Set.fromList
+                children =
+                  getChildrenList state.cache |> Set.fromList
+                getChildrenList cache =
+                  getChildren url cache
+                  |> Result.toMaybe
+                  |> Maybe.withDefault []
+                handleChildren =
+                  getChildrenList state.cache
+                  |> List.map (\key ->
+                    mappingFunctions.handle address (url `appendUrl` key) state
+                  )
+                unsubscribeOldChild key =
+                  mappingFunctions.unsubscribe (url `appendUrl` key) state.previousCache
+                subscribeNewChild key =
+                  mappingFunctions.subscribe address (url `appendUrl` key)
+            in result
+        }
+      mappingFunctions =
+        mapping |> getFunctions
+      getChildren url cache =
+        decode (Decode.dict (Decode.succeed ()) |> Decode.map Dict.keys) url cache
+        |> .data
+  in result
+
+appendUrl : String -> String -> String
+appendUrl base suffix =
+  base ++ "/" ++ suffix

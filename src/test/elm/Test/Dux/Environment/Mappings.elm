@@ -10,9 +10,9 @@ import FirebaseModel.Mapping as Mapping
 baseUrl : String
 baseUrl = "https://thsoft.firebaseio.com/DUX/test/"
 
-expressionView : Mapping.Output ExpressionView
-expressionView =
-  Mapping.mirror Mappings.expressionView (baseUrl ++ "ExpressionView")
+workspace : Mapping.Output Workspace
+workspace =
+  Mapping.mirror Mappings.workspace (baseUrl ++ "Workspace")
 
 main : Signal Html
 main =
@@ -21,17 +21,11 @@ main =
       Html.div
         []
         [
-          a |> View.viewStored View.viewExpressionView
+          a |> View.viewStored View.viewWorkspace
         ]
     )
-    expressionView.model
+    workspace.model
 
-toText : String -> a -> Html
-toText title a =
-  Html.div
-    []
-    [title ++ ": " ++ (a |> toString) |> Html.text]
-
-port expressionViewTasks : Signal (Task () ())
-port expressionViewTasks =
-  expressionView.tasksToRun
+port workspaceTasks : Signal (Task () ())
+port workspaceTasks =
+  workspace.tasksToRun

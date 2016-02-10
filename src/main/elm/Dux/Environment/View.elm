@@ -6,6 +6,14 @@ import FirebaseModel.Mapping exposing (..)
 import Dux.Language.Types exposing (..)
 import Dux.Environment.Types exposing (..)
 
+viewWorkspace : Workspace -> Html
+viewWorkspace  workspace =
+  workspace.views |> viewStored (\views ->
+    div
+      []
+      (views |> List.map (viewStored viewExpressionView))
+  )
+
 viewExpressionView : ExpressionView -> Html
 viewExpressionView expressionView =
   expressionView.expression |> viewStored (viewReference (viewStored viewExpression))
