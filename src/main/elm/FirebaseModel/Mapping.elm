@@ -1,4 +1,9 @@
-module FirebaseModel.Mapping where
+module FirebaseModel.Mapping
+  (
+    Output, Stored, Remote, Error(..), SubscriptionError(..), Mapping, Reference, Many,
+    mirror,
+    fromDecoder, (:=), object1, object2, object3, object4, map, oneOf, recursive, reference, many
+  ) where
 
 import Set
 import Dict exposing (Dict)
@@ -92,7 +97,7 @@ type alias Cache =
 
 type alias Entry =
   {
-    maybeValue: Maybe Decode.Value, -- encoded List String for list entries
+    maybeValue: Maybe Decode.Value,
     subscription: Result SubscriptionError ElmFire.Subscription
   }
 
@@ -317,7 +322,7 @@ unsubscribe url cache =
       mappingFunctions =
         mapping |> getFunctions
       realUrl = \url ->
-        url `appendUrl` key
+        url +/ key
   in result
 
 object1 : (Stored a -> b) -> Mapping a -> Mapping b
@@ -533,9 +538,9 @@ oneOf mappings =
             in result
         }
       typeUrl url =
-        url ++ "/type"
+        url +/ "type"
       valueUrl url =
-        url ++ "/value"
+        url +/ "value"
       findMapping url cache =
         (decode Decode.string (typeUrl url) cache |> .data)
         `Result.andThen` (\typeName ->
@@ -645,7 +650,7 @@ many mapping =
                   |> Result.map (\keys ->
                     keys
                     |> List.map (\key ->
-                      mappingFunctions.transform (url `appendUrl` key) cache
+                      mappingFunctions.transform (url +/ key) cache
                     )
                   )
                   |> Remote url
@@ -685,12 +690,12 @@ many mapping =
                 handleChildren =
                   getChildrenList state.cache
                   |> List.map (\key ->
-                    mappingFunctions.handle address (url `appendUrl` key) state
+                    mappingFunctions.handle address (url +/ key) state
                   )
                 unsubscribeOldChild key =
-                  mappingFunctions.unsubscribe (url `appendUrl` key) state.previousCache
+                  mappingFunctions.unsubscribe (url +/ key) state.previousCache
                 subscribeNewChild key =
-                  mappingFunctions.subscribe address (url `appendUrl` key)
+                  mappingFunctions.subscribe address (url +/ key)
             in result
         }
       mappingFunctions =
@@ -700,6 +705,6 @@ many mapping =
         |> .data
   in result
 
-appendUrl : String -> String -> String
-appendUrl base suffix =
+(+/) : String -> String -> String
+(+/) base suffix =
   base ++ "/" ++ suffix
