@@ -2,7 +2,7 @@ module FirebaseModel.Mapping
   (
     Output, Stored, Remote, Error(..), SubscriptionError(..), Mapping, Reference, Many,
     mirror,
-    fromDecoder, (:=), object1, object2, object3, object4, map, oneOf, recursive, reference, many
+    fromDecoder, (:=), object1, object2, object3, object4, map, choice, recursive, reference, many
   ) where
 
 import Set
@@ -482,8 +482,8 @@ mapRemote function remote =
       remote.data |> function
   }
 
-oneOf : Dict String (Mapping a) -> Mapping a
-oneOf mappings =
+choice : Dict String (Mapping a) -> Mapping a
+choice mappings =
   let result =
         Direct {
           transform = \url cache ->

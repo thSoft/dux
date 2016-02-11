@@ -41,7 +41,7 @@ functionCall =
 
 expression : Mapping Expression
 expression =
-  Mapping.oneOf <|
+  Mapping.choice <|
     Dict.fromList [
       ("numberLiteral", numberLiteral |> Mapping.map NumberLiteralExpression),
       ("functionCall", Mapping.recursive <| \() -> functionCall |> Mapping.map FunctionCallExpression)
