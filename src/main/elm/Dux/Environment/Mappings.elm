@@ -8,10 +8,18 @@ workspace : Mapping Workspace
 workspace =
   Mapping.object1
     Workspace
-    ("views" := Mapping.many expressionView)
+    {
+      key = "views",
+      get = .views,
+      mapping = Mapping.many expressionView
+    }
 
 expressionView : Mapping ExpressionView
 expressionView =
   Mapping.object1
     ExpressionView
-    ("expression" := Mapping.reference expression)
+    {
+      key = "expression",
+      get = .expression,
+      mapping = Mapping.reference expression
+    }
