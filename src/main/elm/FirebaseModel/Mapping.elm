@@ -349,7 +349,7 @@ type alias Field field object =
 withField : InternalMapping (Stored field -> result) object -> Field field object -> InternalMapping result object
 withField functionMapping field =
   let result =
-        Direct {
+        Recursive <| Lazy.lazy <| \() -> {
           transform = \url cache ->
             let transformed =
                   functionResult |> Result.map (\function ->
@@ -390,7 +390,7 @@ withField functionMapping field =
 fieldToMapping : Field field object -> InternalMapping field object
 fieldToMapping field =
   let result =
-        Direct {
+        Recursive <| Lazy.lazy <| \() -> {
           transform = \url cache ->
             mappingFunctions.transform (url +/ field.key) cache,
           subscribe = \address url ->
@@ -453,7 +453,7 @@ type alias Option option choice =
 withOption : Mapping choice -> Option option choice -> Mapping choice
 withOption mapping option =
   let result =
-        Direct {
+        Recursive <| Lazy.lazy <| \() -> {
           transform = \url cache ->
             let transformed =
                   case transformedSoFar |> .data of
@@ -491,7 +491,7 @@ withOption mapping option =
 optionToMapping : Option option choice -> Mapping choice
 optionToMapping option =
   let result =
-        Direct {
+        Recursive <| Lazy.lazy <| \() -> {
           transform = \url cache ->
             ifSelected url cache (Ok ())
             `Result.andThen` (\_ ->

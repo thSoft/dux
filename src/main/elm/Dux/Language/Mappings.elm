@@ -40,45 +40,47 @@ numberLiteral =
 
 functionCall : Mapping FunctionCall
 functionCall =
-  Mapping.object FunctionCall
-    `Mapping.withField` {
-      key = "functionType",
-      get = .functionType,
-      mapping = functionType
-    }
-    `Mapping.withField` {
-      key = "firstArgument",
-      get = .firstArgument,
-      mapping = Mapping.recursive <| \() -> expression
-    }
-    `Mapping.withField` {
-      key = "secondArgument",
-      get = .secondArgument,
-      mapping = Mapping.recursive <| \() -> expression
-    }
+  Mapping.recursive <| \() ->
+    Mapping.object FunctionCall
+      `Mapping.withField` {
+        key = "functionType",
+        get = .functionType,
+        mapping = functionType
+      }
+      `Mapping.withField` {
+        key = "firstArgument",
+        get = .firstArgument,
+        mapping = Mapping.recursive <| \() -> expression
+      }
+      `Mapping.withField` {
+        key = "secondArgument",
+        get = .secondArgument,
+        mapping = Mapping.recursive <| \() -> expression
+      }
 
 expression : Mapping Expression
 expression =
-  Mapping.choice
-    `Mapping.withOption` {
-      typeName = "numberLiteral",
-      constructor = NumberLiteralExpression,
-      selector = \expression ->
-        case expression of
-          NumberLiteralExpression numberLiteralExpression ->
-            Just numberLiteralExpression
-          _ ->
-            Nothing,
-      mapping = numberLiteral
-    }
-    `Mapping.withOption` {
-      typeName = "functionCall",
-      constructor = FunctionCallExpression,
-      selector = \expression ->
-        case expression of
-          FunctionCallExpression functionCallExpression ->
-            Just functionCallExpression
-          _ ->
-            Nothing,
-      mapping = Mapping.recursive <| \() -> functionCall
-    }
+  Mapping.recursive <| \() ->
+    Mapping.choice
+      `Mapping.withOption` {
+        typeName = "numberLiteral",
+        constructor = NumberLiteralExpression,
+        selector = \expression ->
+          case expression of
+            NumberLiteralExpression numberLiteralExpression ->
+              Just numberLiteralExpression
+            _ ->
+              Nothing,
+        mapping = numberLiteral
+      }
+      `Mapping.withOption` {
+        typeName = "functionCall",
+        constructor = FunctionCallExpression,
+        selector = \expression ->
+          case expression of
+            FunctionCallExpression functionCallExpression ->
+              Just functionCallExpression
+            _ ->
+              Nothing,
+        mapping = Mapping.recursive <| \() -> functionCall
+      }
