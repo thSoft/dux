@@ -11,7 +11,7 @@ import ElmFire exposing (Location)
 import DecodeUtil
 import TaskUtil exposing (HandledTask)
 import Component exposing (Component, Update)
-import StructuralEditor.Combobox as Combobox
+import Combobox
 import StructuralEditor.Editor as Editor exposing (Editor)
 import StructuralEditor.Styles as Styles
 import Dux.Environment.NumberLiteralEditor as NumberLiteralEditor

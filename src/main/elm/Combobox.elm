@@ -1,4 +1,4 @@
-module StructuralEditor.Combobox where
+module Combobox where
 
 import Char exposing (KeyCode)
 import Array
@@ -160,7 +160,7 @@ view context address model =
       textContent =
           case context.style of
             Input ->
-              [Attributes.value context.inputText]
+              [Attributes.value model.inputText]
             ContentEditable ->
               [Attributes.property "textContent" (context.inputText |> Encode.string)]
       menu =

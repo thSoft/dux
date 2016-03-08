@@ -15,7 +15,7 @@ import ElmFire exposing (Priority(..), Location)
 import Component exposing (Component, Update)
 import TaskUtil
 import StructuralEditor.Editor as Editor exposing (Editor)
-import StructuralEditor.Combobox as Combobox
+import Combobox
 
 -- TODO fix lost focus when deleting last item
 -- TODO move to next/previous element when pressing enter or right/left

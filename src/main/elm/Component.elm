@@ -34,6 +34,12 @@ type alias Output model =
     , tasks : Signal HandledTask
     }
 
+type alias OutputWithAddress model action =
+    { html : Signal Html
+    , model : Signal model
+    , address : Address action
+    , tasks : Signal HandledTask
+    }
 
 {-| Start an application. It requires a bit of wiring once you have created an
 `Output`. It should pretty much always look like this:
@@ -51,8 +57,8 @@ type alias Output model =
 So once we start the `Output` we feed the HTML into `main` and feed the resulting
 tasks into a `port` that will run them all.
 -}
-start : Component model action -> Output model
-start component =
+start' : Component model action -> OutputWithAddress model action
+start' component =
     let
         -- messages : Signal.Mailbox (Maybe action)
         messages =
@@ -89,9 +95,24 @@ start component =
     in
         { html = Signal.map (component.view address) model
         , model = model
+        , address = address
         , tasks = task
         }
 
+start : Component model action -> Output model
+start component =
+  let result =
+        {
+          model =
+            output.model,
+          html =
+            output.html,
+          tasks =
+            output.tasks
+        }
+      output =
+        start' component
+  in result
 
 type alias Component model action =
   {

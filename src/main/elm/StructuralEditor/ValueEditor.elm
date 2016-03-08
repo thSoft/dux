@@ -9,7 +9,7 @@ import TaskUtil
 import ElmFire exposing (Reference, Location)
 import Component exposing (Component, Update)
 import StructuralEditor.Editor as Editor exposing (Editor)
-import StructuralEditor.Combobox as Combobox
+import Combobox
 import StructuralEditor.Styles as Styles
 
 type alias ValueEditor data =
