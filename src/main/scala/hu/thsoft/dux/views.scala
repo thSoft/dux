@@ -46,4 +46,14 @@ package object views {
       cell
     )
 
+  def expressionView(expressionView: ExpressionView): ReactElement =
+    <.div(
+      expression(expressionView.expression)
+    )
+
+  def workspace(workspace: Workspace): ReactElement =
+    <.div(
+      workspace.views.map(expressionView(_))
+    )
+
 }

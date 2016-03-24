@@ -18,4 +18,12 @@ package object types {
     secondArgument: Expression
   ) extends Expression
 
+  case class ExpressionView(
+    expression: Expression
+  )
+
+  case class Workspace(
+    views: List[ExpressionView]
+  )
+
 }

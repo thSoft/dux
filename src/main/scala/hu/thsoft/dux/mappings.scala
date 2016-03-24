@@ -21,7 +21,9 @@ package object mappings {
     )
 
   lazy val numberLiteral: Mapping[NumberLiteral] =
-    Mapping.map(Mapping.field("value", Mapping.double))(NumberLiteral)
+    Mapping.map(
+      Mapping.field("value", Mapping.double)
+    )(NumberLiteral)
 
   lazy val functionCall: Mapping[FunctionCall] =
     (
@@ -29,5 +31,15 @@ package object mappings {
       Mapping.field("firstArgument", expression) |@|
       Mapping.field("secondArgument", expression)
     )(FunctionCall)
+
+  lazy val expressionView: Mapping[ExpressionView] =
+    Mapping.map(
+      Mapping.field("expression", Mapping.reference(expression))
+    )(ExpressionView)
+
+  lazy val workspace: Mapping[Workspace] =
+    Mapping.map(
+  		Mapping.field("views", Mapping.list(expressionView))
+  	)(Workspace)
 
 }
