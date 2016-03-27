@@ -3,43 +3,47 @@ package hu.thsoft.dux
 import hu.thsoft.firebasemodel.Mapping
 import hu.thsoft.dux.types._
 import scalaz.syntax.apply._
+import hu.thsoft.firebasemodel.Field
+import hu.thsoft.firebasemodel.Alternative
 
 package object mappings {
 
-  lazy val functionType: Mapping[FunctionType] =
-    Mapping.map(Mapping.string)(_ match {
-      case "add" => Add
-      case "subtract" => Subtract
-      case "multiply" => Multiply
-      case "divide" => Divide
-    })
-
-  lazy val expression: Mapping[Expression] =
-    Mapping.choice(
-      "numberLiteral" -> (() => numberLiteral),
-      "functionCall" -> (() => functionCall)
+  lazy val functionType: Mapping[FunctionType] = {
+    Mapping.choice4(
+      Alternative("add", () => Mapping.always(Add)),
+      Alternative("subtract", () => Mapping.always(Subtract)),
+      Alternative("multiply", () => Mapping.always(Multiply)),
+      Alternative("divide", () => Mapping.always(Divide))
     )
+  }
+
+  lazy val expression: Mapping[Expression] = {
+    Mapping.choice2(
+      Alternative("numberLiteral", () => numberLiteral),
+      Alternative("functionCall", () => functionCall)
+    )
+  }
 
   lazy val numberLiteral: Mapping[NumberLiteral] =
-    Mapping.map(
-      Mapping.field("value", Mapping.double)
-    )(NumberLiteral)
+    Mapping.record1(NumberLiteral)(
+      Field("value", Mapping.double, _.value)
+    )
 
   lazy val functionCall: Mapping[FunctionCall] =
-    (
-      Mapping.field("functionType", functionType) |@|
-      Mapping.field("firstArgument", expression) |@|
-      Mapping.field("secondArgument", expression)
-    )(FunctionCall)
+    Mapping.record3(FunctionCall)(
+      Field("functionType", functionType, _.functionType),
+      Field("firstArgument", expression, _.firstArgument),
+      Field("secondArgument", expression, _.secondArgument)
+    )
 
   lazy val expressionView: Mapping[ExpressionView] =
-    Mapping.map(
-      Mapping.field("expression", Mapping.reference(expression))
-    )(ExpressionView)
+    Mapping.record1(ExpressionView)(
+      Field("expression", Mapping.reference(expression), _.expression)
+    )
 
   lazy val workspace: Mapping[Workspace] =
-    Mapping.map(
-  		Mapping.field("views", Mapping.list(expressionView))
-  	)(Workspace)
+    Mapping.record1(Workspace)(
+      Field("views", Mapping.list(expressionView), _.views)
+    )
 
 }

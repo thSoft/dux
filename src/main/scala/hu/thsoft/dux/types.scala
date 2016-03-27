@@ -1,5 +1,8 @@
 package hu.thsoft.dux
 
+import hu.thsoft.firebasemodel.Mapping._
+import hu.thsoft.firebasemodel.Remote
+
 package object types {
 
   sealed trait FunctionType
@@ -10,20 +13,20 @@ package object types {
 
   sealed trait Expression
   case class NumberLiteral(
-    value: Double
+    value: Stored[Double]
   ) extends Expression
   case class FunctionCall(
-    functionType: FunctionType,
-    firstArgument: Expression,
-    secondArgument: Expression
+    functionType: Stored[FunctionType],
+    firstArgument: Stored[Expression],
+    secondArgument: Stored[Expression]
   ) extends Expression
 
   case class ExpressionView(
-    expression: Expression
+    expression: Stored[Remote[Expression]]
   )
 
   case class Workspace(
-    views: List[ExpressionView]
+    views: Stored[Many[ExpressionView]]
   )
 
 }

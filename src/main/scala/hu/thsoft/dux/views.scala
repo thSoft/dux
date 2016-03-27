@@ -31,29 +31,29 @@ package object views {
       case numberLiteralExpression: NumberLiteral => numberLiteral(numberLiteralExpression)
       case functionCallExpression: FunctionCall => functionCall(functionCallExpression)
     }
-  
+
   def numberLiteral(numberLiteral: NumberLiteral): ReactElement =
     <.div(
-      numberLiteral.value,
+      numberLiteral.value.value,
       cell
     )
-  
+
   def functionCall(functionCall: FunctionCall): ReactElement =
     <.div(
-      expression(functionCall.firstArgument),
-      functionType(functionCall.functionType),
-      expression(functionCall.secondArgument),
+      expression(functionCall.firstArgument.value),
+      functionType(functionCall.functionType.value),
+      expression(functionCall.secondArgument.value),
       cell
     )
 
   def expressionView(expressionView: ExpressionView): ReactElement =
     <.div(
-      expression(expressionView.expression)
+      expression(expressionView.expression.value.value)
     )
 
   def workspace(workspace: Workspace): ReactElement =
     <.div(
-      workspace.views.map(expressionView(_))
+      workspace.views.value.map(view => expressionView(view.value))
     )
 
 }
