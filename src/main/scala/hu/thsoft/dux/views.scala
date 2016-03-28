@@ -3,8 +3,19 @@ package hu.thsoft.dux
 import japgolly.scalajs.react.vdom.prefix_<^._
 import hu.thsoft.dux.types._
 import japgolly.scalajs.react.ReactElement
+import hu.thsoft.firebasemodel.Mapping._
 
 package object views {
+
+  def stored[T](view: T => ReactElement)(stored: Stored[T]): ReactElement =
+    stored.value match {
+      case Left(invalid) =>
+        <.img(
+          ^.src := "http://findicons.com/files/icons/1689/splashy/16/error.png",
+          ^.title := s"Expected ${invalid.expectedTypeName} but got ${invalid.json}"
+        )
+      case Right(value) => view(value)
+    }
 
   lazy val cell =
     List(
@@ -14,6 +25,9 @@ package object views {
       ^.border := "1px solid gray",
       ^.borderRadius := "2px"
     )
+
+  def double(double: Stored[Double]): ReactElement =
+    stored((value: Double) => <.span(value))(double)
 
   def functionType(functionType: FunctionType): ReactElement =
     <.div(
@@ -34,26 +48,32 @@ package object views {
 
   def numberLiteral(numberLiteral: NumberLiteral): ReactElement =
     <.div(
-      numberLiteral.value.value,
+      double(numberLiteral.value),
       cell
     )
 
   def functionCall(functionCall: FunctionCall): ReactElement =
     <.div(
-      expression(functionCall.firstArgument.value),
-      functionType(functionCall.functionType.value),
-      expression(functionCall.secondArgument.value),
+      stored(expression)(functionCall.firstArgument),
+      stored(functionType)(functionCall.functionType),
+      stored(expression)(functionCall.secondArgument),
       cell
     )
 
   def expressionView(expressionView: ExpressionView): ReactElement =
     <.div(
-      expression(expressionView.expression.value.value)
+      stored((storedExpression: Stored[Expression]) => stored(expression)(storedExpression))(expressionView.expression)
     )
 
   def workspace(workspace: Workspace): ReactElement =
     <.div(
-      workspace.views.value.map(view => expressionView(view.value))
+      stored((views: Many[ExpressionView]) =>
+        <.div(
+          views.map((view: Stored[ExpressionView]) =>
+            stored(expressionView)(view)
+          )
+        )
+      )(workspace.views)
     )
 
 }

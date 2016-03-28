@@ -9,7 +9,7 @@ import hu.thsoft.firebasemodel.Alternative
 package object mappings {
 
   lazy val functionType: Mapping[FunctionType] = {
-    Mapping.choice4(
+    Mapping.choice(
       Alternative("add", () => Mapping.always(Add)),
       Alternative("subtract", () => Mapping.always(Subtract)),
       Alternative("multiply", () => Mapping.always(Multiply)),
@@ -18,31 +18,31 @@ package object mappings {
   }
 
   lazy val expression: Mapping[Expression] = {
-    Mapping.choice2(
+    Mapping.choice(
       Alternative("numberLiteral", () => numberLiteral),
       Alternative("functionCall", () => functionCall)
     )
   }
 
   lazy val numberLiteral: Mapping[NumberLiteral] =
-    Mapping.record1(NumberLiteral)(
+    Mapping.record(NumberLiteral)(
       Field("value", Mapping.double, _.value)
     )
 
   lazy val functionCall: Mapping[FunctionCall] =
-    Mapping.record3(FunctionCall)(
+    Mapping.record(FunctionCall)(
       Field("functionType", functionType, _.functionType),
       Field("firstArgument", expression, _.firstArgument),
       Field("secondArgument", expression, _.secondArgument)
     )
 
   lazy val expressionView: Mapping[ExpressionView] =
-    Mapping.record1(ExpressionView)(
+    Mapping.record(ExpressionView)(
       Field("expression", Mapping.reference(expression), _.expression)
     )
 
   lazy val workspace: Mapping[Workspace] =
-    Mapping.record1(Workspace)(
+    Mapping.record(Workspace)(
       Field("views", Mapping.list(expressionView), _.views)
     )
 

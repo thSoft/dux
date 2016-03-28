@@ -22,7 +22,7 @@ package object types {
   ) extends Expression
 
   case class ExpressionView(
-    expression: Stored[Remote[Expression]]
+    expression: Stored[Stored[Expression]]
   )
 
   case class Workspace(

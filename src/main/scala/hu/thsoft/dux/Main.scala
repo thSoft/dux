@@ -14,7 +14,7 @@ object Main extends JSApp {
   def main(): Unit = {
     val mapping = mappings.workspace
     val model = mapping.observe(new Firebase("https://thsoft.firebaseio.com/DUX/test/Workspace"))
-    val view = model.map(workspace => views.workspace(workspace.value))
+    val view = model.map(workspace => views.stored(views.workspace)(workspace))
 
     val container = document.createElement("div")
     document.body.appendChild(container)
