@@ -7,11 +7,13 @@ import hu.thsoft.firebasemodel.Mapping._
 
 package object views {
 
-  def stored[T](view: T => ReactElement)(stored: Stored[T]): ReactElement =
+  def stored[T](stored: Stored[T])(view: T => ReactElement): ReactElement =
     stored.value match {
       case Left(invalid) =>
-        <.img(
-          ^.src := "http://findicons.com/files/icons/1689/splashy/16/error.png",
+        <.a(
+          "⚠",
+          ^.href := stored.firebase.toString,
+          ^.target := "_blank",
           ^.title := s"Expected ${invalid.expectedTypeName} but got ${invalid.json}"
         )
       case Right(value) => view(value)
@@ -27,7 +29,7 @@ package object views {
     )
 
   def double(double: Stored[Double]): ReactElement =
-    stored((value: Double) => <.span(value))(double)
+    stored(double)(value => <.span(value))
 
   def functionType(functionType: FunctionType): ReactElement =
     <.div(
@@ -54,26 +56,28 @@ package object views {
 
   def functionCall(functionCall: FunctionCall): ReactElement =
     <.div(
-      stored(expression)(functionCall.firstArgument),
-      stored(functionType)(functionCall.functionType),
-      stored(expression)(functionCall.secondArgument),
+      stored(functionCall.firstArgument)(expression),
+      stored(functionCall.functionType)(functionType),
+      stored(functionCall.secondArgument)(expression),
       cell
     )
 
   def expressionView(expressionView: ExpressionView): ReactElement =
     <.div(
-      stored((storedExpression: Stored[Expression]) => stored(expression)(storedExpression))(expressionView.expression)
+      stored(expressionView.expression)(storedExpression =>
+        stored(storedExpression)(expression)
+      )
     )
 
   def workspace(workspace: Workspace): ReactElement =
     <.div(
-      stored((views: Many[ExpressionView]) =>
+      stored(workspace.views)(views =>
         <.div(
-          views.map((view: Stored[ExpressionView]) =>
-            stored(expressionView)(view)
+          views.map(view =>
+            stored(view)(expressionView)
           )
         )
-      )(workspace.views)
+      )
     )
 
 }
