@@ -9,7 +9,8 @@ scalaVersion := "2.11.7"
 libraryDependencies ++= Seq(
   "hu.thsoft" %%% "firebase-model" % "0.0.0",
   "com.github.japgolly.scalajs-react" %%% "core" % "0.10.4",
-  "org.scalaz" %%% "scalaz-core" % "7.2.1"
+  "com.github.japgolly.scalacss" %%% "core" % "0.4.0",
+  "com.github.japgolly.scalacss" %%% "ext-react" % "0.4.0"
 )
 
 jsDependencies ++= Seq(
