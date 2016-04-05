@@ -16,6 +16,7 @@ import monifu.reactive.Observer
 import scalacss.ScalaCssReact._
 import japgolly.scalajs.react._
 import org.scalajs.dom.ext.KeyValue
+import org.scalajs.dom
 
 class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserver: Observer[Option[EditorState[CellId]]]) {
 
@@ -80,7 +81,8 @@ class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserv
           case content: AtomicContent[CellId] => content.stringValue
           case _ => ""
           }
-        editorStateObserver.onNext(Some(EditorState(selection, initialInput, 0)))
+        val inputCaretIndex = dom.window.getSelection().focusOffset
+        editorStateObserver.onNext(Some(EditorState(selection, initialInput, inputCaretIndex, 0)))
       }),
       ^.position.relative,
       theMenu
@@ -93,7 +95,9 @@ class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserv
       <.input(
         ^.autoFocus := true,
         ^.value := editorState.input,
-        ^.defaultValue := "",
+        ^.onFocus ==> ((event: SyntheticFocusEvent[HTMLInputElement]) => Callback {
+          event.target.selectionStart = editorState.inputCaretIndex
+        }),
         ^.onInput ==> ((event: SyntheticCompositionEvent[HTMLInputElement]) => Callback {
           editorStateObserver.onNext(Some(editorState.copy(input = event.target.value)))
         }),

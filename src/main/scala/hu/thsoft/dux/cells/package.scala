@@ -49,6 +49,7 @@ package object cells {
   case class EditorState[CellId](
     selection: Selection[CellId],
     input: String,
+    inputCaretIndex: Int,
     selectedCommandIndex: Int
   )
 
