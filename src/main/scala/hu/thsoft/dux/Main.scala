@@ -23,7 +23,7 @@ object Main extends JSApp {
     val model = mapping.observe(new Firebase("https://thsoft.firebaseio.com/DUX/test/Workspace"))
     val editorState = BehaviorSubject[Option[EditorState[String]]](None)
     val view = model.combineLatest(editorState).map { case (currentModel, currentEditorState) =>
-      val cell = Cells.stored(currentModel)(Cells.workspace)
+      val cell = Cells.workspace(currentModel)
       new Render(currentEditorState, editorState).cell(cell)
     }
 
