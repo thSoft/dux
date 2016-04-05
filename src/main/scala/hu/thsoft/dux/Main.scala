@@ -13,22 +13,24 @@ import scalacss.Defaults._
 import scalacss.ScalaCssReact._
 import monifu.reactive.subjects.PublishSubject
 import monifu.reactive.subjects.BehaviorSubject
+import hu.thsoft.dux.cells.EditorState
+import hu.thsoft.dux.cells.Render
 
 object Main extends JSApp {
 
   def main(): Unit = {
     val mapping = mappings.workspace
     val model = mapping.observe(new Firebase("https://thsoft.firebaseio.com/DUX/test/Workspace"))
-    val editorState = BehaviorSubject[Option[Editor.State[String]]](None)
+    val editorState = BehaviorSubject[Option[EditorState[String]]](None)
     val view = model.combineLatest(editorState).map { case (currentModel, currentEditorState) =>
-      val views = new Views(currentEditorState, editorState)
-      views.stored(currentModel)(views.workspace)
+      val cell = Cells.stored(currentModel)(Cells.workspace)
+      new Render(currentEditorState, editorState).cell(cell)
     }
 
-    Styles.addToDocument()
+    List(cells.Styles, Styles).foreach(_.addToDocument())
     val container = document.createElement("div")
     document.body.appendChild(container)
-    view.foreach(ReactDOM.render(_, container))
+    view.foreach(element => ReactDOM.render(element, container))
   }
 
 }

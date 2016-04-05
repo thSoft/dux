@@ -5,7 +5,7 @@ import scalacss.Defaults._
 object Styles extends StyleSheet.Inline {
   import dsl._
 
-  val cell = style(
+  val expression = style(
     display.inlineBlock,
     margin(1 px),
     borderWidth(1 px),
@@ -14,18 +14,11 @@ object Styles extends StyleSheet.Inline {
     borderRadius(2 px)
   )
 
-  val editor = style(
-    position.absolute,
-    zIndex(Int.MaxValue),
-    top(100 %%),
-    left(0 px),
-    display.block,
-    backgroundColor.lightgray
-  )
+  val functionType =
+    expression
 
-  val selectedCommand = style(
-    color.white,
-    backgroundColor.blue
+  val expressionView = style(
+    display.block
   )
 
 }
