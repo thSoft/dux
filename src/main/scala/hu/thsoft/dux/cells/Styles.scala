@@ -19,4 +19,10 @@ object Styles extends StyleSheet.Inline {
     backgroundColor.blue
   )
 
+  val commandDescription = style(
+     fontSize(80 %%),
+     textAlign.right,
+     color.gray
+  )
+
 }

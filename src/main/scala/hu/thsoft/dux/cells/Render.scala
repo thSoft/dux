@@ -20,13 +20,17 @@ import org.scalajs.dom
 
 class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserver: Observer[Option[EditorState[CellId]]]) {
 
-  def selected(it: Cell[CellId]) = {
+  def selected(it: Cell[CellId]): Boolean = {
     editorState.map(_.selection.cellId == it.id).getOrElse(false)
   }
 
+  def sideMenuElement(menu: Menu): TagMod = {
+    if (menu.isDefined) " " else EmptyTag
+  }
+
   def cell(it: Cell[CellId]): ReactElement = {
-    val leftMenu = menuContainer(it, LeftMenu, EmptyTag)
-    val rightMenu = menuContainer(it, RightMenu, EmptyTag)
+    val leftMenu = menuContainer(it, LeftMenu, sideMenuElement(it.content.leftMenu))
+    val rightMenu = menuContainer(it, RightMenu, sideMenuElement(it.content.rightMenu))
     val content: ReactElement =
       <.span(
         it.content match {
@@ -57,10 +61,10 @@ class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserv
                 case LeftMenu => cell.content.leftMenu
                 case RightMenu => cell.content.rightMenu
                 case ContentMenu =>
-                cell.content match {
-                case content: AtomicContent[CellId] => content.menu
-                case content: CompositeContent[CellId] => None
-                }
+                  cell.content match {
+                  case content: AtomicContent[CellId] => content.menu
+                  case content: CompositeContent[CellId] => None
+                  }
           }
           val menuCommands = selectedMenu.map(getCommands => getCommands(editorState.input))
               menuCommands.map(commands => {
@@ -128,7 +132,8 @@ class Render[CellId](editorState: Option[EditorState[CellId]], editorStateObserv
               command.text
             ),
             <.div(
-              command.description
+              command.description,
+              Styles.commandDescription
             )
           )
         }
