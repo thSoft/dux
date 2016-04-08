@@ -24,82 +24,82 @@ object Render {
 
   def apply[CellId](root: Cell[CellId], editorState: Option[EditorState[CellId]], editorStateObserver: Observer[Option[EditorState[CellId]]]): ReactElement = {
 
-    case class MenuContainer[CellId](
+    case class Slot[CellId](
       initialInput: String,
-      selection: Selection[CellId]
+      id: SlotId[CellId]
     )
 
-    lazy val menuContainerZipper = makeMenuContainerList(root).toStream.toZipper
+    lazy val slotZipper = makeSlotList(root).toStream.toZipper
 
-    def makeMenuContainerList(cell: Cell[CellId]): List[MenuContainer[CellId]] = {
-      def menuContainerList(menu: Menu, menuId: MenuId) = {
-        val initialInput = getInitialInput(cell, menuId)
-        if (menu.isDefined) List(MenuContainer(initialInput, Selection(cell.id, menuId))) else List()
+    def makeSlotList(cell: Cell[CellId]): List[Slot[CellId]] = {
+      def slotList(menu: Menu, slotType: SlotType) = {
+        val initialInput = getInitialInput(cell, slotType)
+        if (menu.isDefined) List(Slot(initialInput, SlotId(cell.id, slotType))) else List()
       }
-      val contentMenus =
+      val contentSlotList =
         cell.content match {
-          case content: AtomicContent[CellId] => menuContainerList(content.menu, ContentMenu)
-          case content: CompositeContent[CellId] => content.children.flatMap(child => makeMenuContainerList(child))
+          case content: AtomicContent[CellId] => slotList(content.menu, ContentSlot)
+          case content: CompositeContent[CellId] => content.children.flatMap(child => makeSlotList(child))
         }
-      val leftMenus = menuContainerList(cell.content.leftMenu, LeftMenu)
-      val rightMenus = menuContainerList(cell.content.rightMenu, RightMenu)
-      leftMenus ++ contentMenus ++ rightMenus
+      val leftSlotList = slotList(cell.content.leftMenu, LeftSlot)
+      val rightSlotList = slotList(cell.content.rightMenu, RightSlot)
+      leftSlotList ++ contentSlotList ++ rightSlotList
     }
 
-    def getInitialInput(cell: Cell[CellId], menuId: MenuId): String = {
-      menuId match {
-        case LeftMenu => ""
-        case ContentMenu => {
+    def getInitialInput(cell: Cell[CellId], slotType: SlotType): String = {
+      slotType match {
+        case LeftSlot => ""
+        case ContentSlot => {
           cell.content match {
             case content: AtomicContent[CellId] => content.stringValue
             case content: CompositeContent[CellId] => ""
           }
         }
-        case RightMenu => ""
+        case RightSlot => ""
       }
     }
 
-    def selected(it: Cell[CellId]): Boolean = {
-      editorState.map(_.selection.cellId == it.id).getOrElse(false)
+    def selected(cell: Cell[CellId]): Boolean = {
+      editorState.map(_.selection.cellId == cell.id).getOrElse(false)
     }
 
-    def sideMenuElement(menu: Menu): TagMod = {
+    def sideMenuTagMod(menu: Menu): TagMod = {
       if (menu.isDefined) " " else EmptyTag
     }
 
-    def cell(it: Cell[CellId]): ReactElement = {
-      val leftMenu = menuContainer(it, LeftMenu, sideMenuElement(it.content.leftMenu))
-      val rightMenu = menuContainer(it, RightMenu, sideMenuElement(it.content.rightMenu))
-      val content: ReactElement =
+    def renderCell(cell: Cell[CellId]): ReactElement = {
+      val leftSlot = renderSlot(cell, LeftSlot, sideMenuTagMod(cell.content.leftMenu))
+      val rightSlot = renderSlot(cell, RightSlot, sideMenuTagMod(cell.content.rightMenu))
+      val contentSlot: ReactElement =
         <.span(
-          it.content match {
+          cell.content match {
             case content: AtomicContent[CellId] =>
-              menuContainer(it, ContentMenu, content.element)
+              renderSlot(cell, ContentSlot, content.element)
             case content: CompositeContent[CellId] =>
               <.span(
-                content.children.map(cell(_)),
+                content.children.map(renderCell(_)),
                 content.tagMod
               )
           },
-          selected(it) ?= (^.backgroundColor := "lightblue")
+          selected(cell) ?= Styles.selected
         )
       <.span(
-        leftMenu,
-        content,
-        rightMenu
+        leftSlot,
+        contentSlot,
+        rightSlot
       )
     }
 
-    def menuContainer(cell: Cell[CellId], menuId: MenuId, element: TagMod): ReactElement = {
-      val theMenu =
+    def renderSlot(cell: Cell[CellId], slotType: SlotType, element: TagMod): ReactElement = {
+      val menu =
         if (selected(cell)) {
           editorState.flatMap(editorState => {
-            if (editorState.selection.menuId == menuId) {
+            if (editorState.selection.slotType == slotType) {
               val selectedMenu: Menu =
-                menuId match {
-                  case LeftMenu => cell.content.leftMenu
-                  case RightMenu => cell.content.rightMenu
-                  case ContentMenu =>
+                slotType match {
+                  case LeftSlot => cell.content.leftMenu
+                  case RightSlot => cell.content.rightMenu
+                  case ContentSlot =>
                     cell.content match {
                       case content: AtomicContent[CellId] => content.menu
                       case content: CompositeContent[CellId] => None
@@ -107,7 +107,7 @@ object Render {
                 }
               val menuCommands = selectedMenu.map(getCommands => getCommands(editorState.input))
               menuCommands.map(commands => {
-                menu(cell, editorState, commands)
+                renderMenu(cell, editorState, commands)
               })
             } else {
               None
@@ -118,18 +118,18 @@ object Render {
         element,
         ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
           event.stopPropagation()
-          val menuContainer = MenuContainer(getInitialInput(cell, menuId), Selection(cell.id, menuId))
-          val newEditorState = makeEditorState(menuContainer, dom.window.getSelection().focusOffset)
+          val slot = Slot(getInitialInput(cell, slotType), SlotId(cell.id, slotType))
+          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
           editorStateObserver.onNext(Some(newEditorState))
         }),
-        ^.position.relative,
-        theMenu
+        Styles.slot,
+        menu
       )
     }
 
-    def menu(cell: Cell[CellId], editorState: EditorState[CellId], commands: List[Command]): ReactElement =
+    def renderMenu(cell: Cell[CellId], editorState: EditorState[CellId], commands: List[Command]): ReactElement =
       <.div(
-        Styles.editor,
+        Styles.menu,
         <.input(
           ^.autoFocus := true,
           ^.value := editorState.input,
@@ -150,10 +150,10 @@ object Render {
                 val atStart = event.target.selectionStart == 0
                 val atEnd = event.target.selectionEnd == editorState.input.length
                 if ((atStart && !right) || (atEnd && right)) {
-                  val menuContainerOption = navigate(editorState.selection, right)
-                  val newEditorState = menuContainerOption.map(menuContainer => {
-                    val caretIndex = if (!right) menuContainer.initialInput.length else 0
-                    makeEditorState(menuContainer, caretIndex)
+                  val newSlot = navigate(editorState.selection, right)
+                  val newEditorState = newSlot.map(slot => {
+                    val caretIndex = if (!right) slot.initialInput.length else 0
+                    makeEditorState(slot, caretIndex)
                   })
                   editorStateObserver.onNext(newEditorState)
                   event.preventDefault()
@@ -190,17 +190,17 @@ object Render {
         )
       )
 
-    def navigate(selection: Selection[CellId], right: Boolean): Option[MenuContainer[CellId]] = {
-      menuContainerZipper.flatMap(menuContainerZipper =>
-        menuContainerZipper.findZ(_.selection == selection).map(if (right) _.nextC else _.previousC).map(_.focus)
+    def navigate(selection: SlotId[CellId], right: Boolean): Option[Slot[CellId]] = {
+      slotZipper.flatMap(slotZipper =>
+        slotZipper.findZ(_.id == selection).map(if (right) _.nextC else _.previousC).map(_.focus)
       )
     }
 
-    def makeEditorState(menuContainer: MenuContainer[CellId], inputCaretIndex: Int): EditorState[CellId] = {
-      EditorState(menuContainer.selection, menuContainer.initialInput, inputCaretIndex, 0)
+    def makeEditorState(slot: Slot[CellId], inputCaretIndex: Int): EditorState[CellId] = {
+      EditorState(slot.id, slot.initialInput, inputCaretIndex, 0)
     }
 
-    cell(root)
+    renderCell(root)
   }
 
 }

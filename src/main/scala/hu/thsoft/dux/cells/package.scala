@@ -47,21 +47,21 @@ package object cells {
   }
 
   case class EditorState[CellId](
-    selection: Selection[CellId],
+    selection: SlotId[CellId],
     input: String,
     inputCaretIndex: Int,
     selectedCommandIndex: Int
   )
 
-  case class Selection[CellId](
+  case class SlotId[CellId](
     cellId: CellId,
-    menuId: MenuId
+    slotType: SlotType
   )
 
-  sealed trait MenuId
-  case object LeftMenu extends MenuId
-  case object ContentMenu extends MenuId
-  case object RightMenu extends MenuId
+  sealed trait SlotType
+  case object LeftSlot extends SlotType
+  case object ContentSlot extends SlotType
+  case object RightSlot extends SlotType
 
   case class Command(
     text: String,
