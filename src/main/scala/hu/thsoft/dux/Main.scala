@@ -24,7 +24,7 @@ object Main extends JSApp {
     val editorState = BehaviorSubject[Option[EditorState[String]]](None)
     val view = model.combineLatest(editorState).map { case (currentModel, currentEditorState) =>
       val cell = Cells.workspace(currentModel)
-      new Render(currentEditorState, editorState).cell(cell)
+      Render(cell, currentEditorState, editorState)
     }
 
     List(cells.Styles, Styles).foreach(_.addToDocument())
