@@ -21,12 +21,13 @@ import hu.thsoft.dux.cells._
 import scala.util.Try
 import hu.thsoft.firebasemodel.Mapping
 import hu.thsoft.firebasemodel.Remote
+import hu.thsoft.dux.Evaluate.Evaluation
 
 object Cells {
 
   val errorString = "⚠"
 
-  def stored[T](stored: Stored[T])(view: T => CellContent[String]): Cell[String] = {
+  def fromStored[T](stored: Stored[T])(view: T => CellContent[String]): Cell[String] = {
     val url = stored.firebase.toString
     val content: CellContent[String] =
       stored.value match {
@@ -46,8 +47,8 @@ object Cells {
     Cell(url, content)
   }
 
-  def double(storedDouble: Stored[Double]): Cell[String] =
-    stored(storedDouble)(double =>
+  def fromDouble(storedDouble: Stored[Double]): Cell[String] =
+    fromStored(storedDouble)(double =>
       atomicContent(
         <.span(double),
         double.toString
@@ -62,7 +63,7 @@ object Cells {
       ))
     )
 
-  def functionType(storedFunctionType: Stored[FunctionType]): Cell[String] = {
+  def fromFunctionType(storedFunctionType: Stored[FunctionType]): Cell[String] = {
     val stringValues: Map[FunctionType, String] =
       Map(
         Add -> "+",
@@ -77,7 +78,7 @@ object Cells {
         Multiply -> "·",
         Divide -> "/"
       )
-    stored(storedFunctionType)(functionType => {
+    fromStored(storedFunctionType)(functionType => {
       atomicContent(
         <.div(
           contentTexts.getOrElse[String](functionType, errorString),
@@ -96,56 +97,57 @@ object Cells {
     })
   }
 
-  def expression(storedExpression: Stored[Expression]): Cell[String] = {
-    storedExpression.value.right.map(expression =>
-      expression match {
-      case expression: NumberLiteral => numberLiteral(Remote(storedExpression.firebase, Right(expression)))
-      case expression: FunctionCall => functionCall(Remote(storedExpression.firebase, Right(expression)))
+  def showEvaluation(evaluation: Evaluation): String = {
+    evaluation.result.fold(
+      failure => {
+        failure.toString
+      },
+      success => {
+        success.toString
       }
-    ).fold(left => {
-      Cell(storedExpression.firebase.toString, atomicContent(<.span(errorString), ""))
-    }, right => right)
+    )
   }
 
-  def numberLiteral(storedNumberLiteral: Stored[NumberLiteral]): Cell[String] =
-    stored(storedNumberLiteral)(numberLiteral => {
-      compositeContent(
-        List(double(numberLiteral.value)),
+  def fromExpression(storedExpression: Stored[Expression]): Cell[String] = {
+    fromStored(storedExpression)(expression => {
+      val evaluation = Evaluate(storedExpression)
+      val tagMod =
+        (^.title := showEvaluation(evaluation)) +
         Styles.expression
-      )
+      val children =
+        expression match {
+          case numberLiteral: NumberLiteral =>
+            List(fromDouble(numberLiteral.value))
+          case functionCall: FunctionCall =>
+            List(
+              fromExpression(functionCall.firstArgument),
+              fromFunctionType(functionCall.functionType),
+              fromExpression(functionCall.secondArgument)
+            )
+        }
+      compositeContent(children, tagMod)
     })
+  }
 
-  def functionCall(storedFunctionCall: Stored[FunctionCall]): Cell[String] =
-    stored(storedFunctionCall)(functionCall => {
+  def fromExpressionView(storedExpressionView: Stored[ExpressionView]): Cell[String] =
+    fromStored(storedExpressionView)(expressionView => {
       compositeContent(
         List(
-          expression(functionCall.firstArgument),
-          functionType(functionCall.functionType),
-          expression(functionCall.secondArgument)
-        ),
-        Styles.expression
-      )
-    })
-
-  def expressionView(storedExpressionView: Stored[ExpressionView]): Cell[String] =
-    stored(storedExpressionView)(expressionView => {
-      compositeContent(
-        List(
-          stored(expressionView.expression)(storedExpression =>
-            compositeContent(expression(storedExpression))
+          fromStored(expressionView.expression)(storedExpression =>
+            compositeContent(fromExpression(storedExpression))
           )
         ),
         Styles.expressionView
       )
     })
 
-  def workspace(storedWorkspace: Stored[Workspace]): Cell[String] =
-    stored(storedWorkspace)(workspace => {
+  def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] =
+    fromStored(storedWorkspace)(workspace => {
       compositeContent(
-        stored(workspace.views)(views =>
+        fromStored(workspace.views)(views =>
           compositeContent(
             views.map(view =>
-              expressionView(view)
+              fromExpressionView(view)
             )
           )
         )
