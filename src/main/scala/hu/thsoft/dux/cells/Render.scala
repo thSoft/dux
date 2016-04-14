@@ -105,9 +105,8 @@ object Render {
                       case content: CompositeContent[CellId] => None
                     }
                 }
-              val menuCommands = selectedMenu.map(getCommands => getCommands(editorState.input))
-              menuCommands.map(commands => {
-                renderMenu(cell, editorState, commands)
+              selectedMenu.map(menuContent => {
+                renderMenu(cell, slotType, editorState, menuContent)
               })
             } else {
               None
@@ -127,7 +126,8 @@ object Render {
       )
     }
 
-    def renderMenu(cell: Cell[CellId], editorState: EditorState[CellId], commands: List[Command[CellId]]): ReactElement =
+    def renderMenu(cell: Cell[CellId], slotType: SlotType, editorState: EditorState[CellId], menuContent: MenuContent[CellId]): ReactElement = {
+      val commands = menuContent.getCommands(editorState.input)
       <.div(
         Styles.menu,
         <.input(
@@ -174,6 +174,20 @@ object Render {
                   editorStateObserver.onNext(Some(nextEditorState))
                   ()
                 }).getOrElse(Callback.empty)
+              case KeyValue.Backspace =>
+                CallbackTo.pure(editorState.input).flatMap(input => {
+                  if ((slotType == RightSlot) && (editorState.inputCaretIndex == 0))
+                    menuContent.deleteCallback
+                  else
+                    Callback.empty
+                })
+              case KeyValue.Delete =>
+                CallbackTo.pure(editorState.input).flatMap(input => {
+                  if ((slotType == LeftSlot) && (editorState.inputCaretIndex == editorState.input.length))
+                    menuContent.deleteCallback
+                  else
+                    Callback.empty
+                })
               case _ => Callback.empty
             }
           })
@@ -193,6 +207,7 @@ object Render {
           }
         )
       )
+    }
 
     def navigate(selection: SlotId[CellId], right: Boolean): Option[Slot[CellId]] = {
       slotZipper.flatMap(slotZipper =>

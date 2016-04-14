@@ -9,7 +9,12 @@ import japgolly.scalajs.react.vdom.prefix_<^._
 package object cells {
 
   type Menu[CellId] =
-    Option[String => List[Command[CellId]]]
+    Option[MenuContent[CellId]]
+
+  case class MenuContent[CellId](
+    getCommands: String => List[Command[CellId]],
+    deleteCallback: Callback
+  )
 
   case class Cell[CellId](
     id: CellId,
