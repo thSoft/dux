@@ -31,10 +31,13 @@ package object mappings {
 
   lazy val functionCall: Mapping[FunctionCall] =
     Mapping.record(FunctionCall)(
-      Field("functionType", functionType, _.functionType),
-      Field("firstArgument", expression, _.firstArgument),
-      Field("secondArgument", expression, _.secondArgument)
+      Field(functionTypeKey, functionType, _.functionType),
+      Field(firstArgumentKey, expression, _.firstArgument),
+      Field(secondArgumentKey, expression, _.secondArgument)
     )
+  val functionTypeKey = "functionType"
+  val firstArgumentKey = "firstArgument"
+  val secondArgumentKey = "secondArgument"
 
   lazy val expressionView: Mapping[ExpressionView] =
     Mapping.record(ExpressionView)(

@@ -7,6 +7,7 @@ object Styles extends StyleSheet.Inline {
 
   val expression = style(
     display.inlineBlock,
+    padding(1 px),
     margin(1 px),
     borderWidth(1 px),
     borderColor.gray,

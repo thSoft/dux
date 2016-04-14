@@ -32,7 +32,7 @@ object Render {
     lazy val slotZipper = makeSlotList(root).toStream.toZipper
 
     def makeSlotList(cell: Cell[CellId]): List[Slot[CellId]] = {
-      def slotList(menu: Menu, slotType: SlotType) = {
+      def slotList(menu: Menu[CellId], slotType: SlotType) = {
         val initialInput = getInitialInput(cell, slotType)
         if (menu.isDefined) List(Slot(initialInput, SlotId(cell.id, slotType))) else List()
       }
@@ -63,7 +63,7 @@ object Render {
       editorState.map(_.selection.cellId == cell.id).getOrElse(false)
     }
 
-    def sideMenuTagMod(menu: Menu): TagMod = {
+    def sideMenuTagMod(menu: Menu[CellId]): TagMod = {
       if (menu.isDefined) " " else EmptyTag
     }
 
@@ -95,7 +95,7 @@ object Render {
         if (selected(cell)) {
           editorState.flatMap(editorState => {
             if (editorState.selection.slotType == slotType) {
-              val selectedMenu: Menu =
+              val selectedMenu: Menu[CellId] =
                 slotType match {
                   case LeftSlot => cell.content.leftMenu
                   case RightSlot => cell.content.rightMenu
@@ -127,7 +127,7 @@ object Render {
       )
     }
 
-    def renderMenu(cell: Cell[CellId], editorState: EditorState[CellId], commands: List[Command]): ReactElement =
+    def renderMenu(cell: Cell[CellId], editorState: EditorState[CellId], commands: List[Command[CellId]]): ReactElement =
       <.div(
         Styles.menu,
         <.input(
@@ -169,7 +169,11 @@ object Render {
               case KeyValue.ArrowRight =>
                 doNavigate(true)
               case KeyValue.Enter =>
-                commands.lift(editorState.selectedCommandIndex).map(_.callback >> doNavigate(true)).getOrElse(Callback.empty)
+                commands.lift(editorState.selectedCommandIndex).map(command => command.callback.thenRun {
+                  val nextEditorState = EditorState(command.nextSlotId, "", 0, 0)
+                  editorStateObserver.onNext(Some(nextEditorState))
+                  ()
+                }).getOrElse(Callback.empty)
               case _ => Callback.empty
             }
           })
