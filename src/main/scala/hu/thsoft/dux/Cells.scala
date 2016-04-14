@@ -47,30 +47,33 @@ object Cells {
     Cell(url, content)
   }
 
-  def fromDouble(storedDouble: Stored[Double]): Cell[String] =
+  def fromDouble(storedDouble: Stored[Double]): Cell[String] = {
+    val getCommands =
+      (input: String) =>
+        Try { input.toDouble }.toOption.map(newValue => {
+          List(
+            Command(
+              input,
+              s"Change to $input",
+              Callback {
+                Mapping.double.set(storedDouble.firebase, newValue)
+              },
+              SlotId(storedDouble.firebase.toString, ContentSlot)
+            )
+          )
+        }).getOrElse(List())
     fromStored(storedDouble)(double => {
       atomicContent[String](
         <.span(double),
         double.toString
       ).copy(menu =
         Some(MenuContent(
-          getCommands = input =>
-            Try { input.toDouble }.toOption.map(newValue => {
-              List(
-                Command(
-                  input,
-                  s"Change to $input",
-                  Callback {
-                    Mapping.double.set(storedDouble.firebase, newValue)
-                  },
-                  SlotId(storedDouble.firebase.toString, ContentSlot)
-                )
-              )
-            }).getOrElse(List()),
+          getCommands = getCommands,
           deleteCallback = Callback.empty
         ))
       )
     })
+  }
 
   val functionTypeStringValues: Map[FunctionType, String] =
     Map(
@@ -88,6 +91,20 @@ object Cells {
         Multiply -> "·",
         Divide -> "/"
       )
+    val getCommands =
+      (input: String) =>
+        functionTypeStringValues.map(_.swap).get(input).map(newValue => {
+          List(
+            Command(
+              input,
+              s"Change to $input",
+              Callback {
+                mappings.functionType.set(storedFunctionType.firebase, newValue)
+              },
+              SlotId(storedFunctionType.firebase.toString, ContentSlot)
+            )
+          )
+        }).getOrElse(List())
     fromStored(storedFunctionType)(functionType => {
       atomicContent[String](
         <.div(
@@ -97,20 +114,7 @@ object Cells {
         functionTypeStringValues.getOrElse(functionType, "")
       ).copy(menu =
         Some(MenuContent(
-          getCommands =
-            input =>
-              functionTypeStringValues.map(_.swap).get(input).map(newValue => {
-                List(
-                  Command(
-                    input,
-                    s"Change to $input",
-                    Callback {
-                      mappings.functionType.set(storedFunctionType.firebase, newValue)
-                    },
-                    SlotId(storedFunctionType.firebase.toString, ContentSlot)
-                  )
-                )
-              }).getOrElse(List()),
+          getCommands = getCommands,
           deleteCallback = Callback.empty
         ))
       )
@@ -150,50 +154,53 @@ object Cells {
       })
     def sideMenu(right: Boolean): Menu[String] = {
       storedExpression.value.right.toOption.map(expression => {
-        MenuContent(
-          getCommands =
-            input => {
-              functionTypeStringValues.map(_.swap).get(input).map(functionType => {
-                val storedFunctionType =
-                  Remote(storedExpression.firebase, Right(functionType))
-                val storedFirstArgument =
-                  if (right) {
-                    Remote(storedExpression.firebase, Right(expression))
-                  } else {
-                    val storedValue = Remote(storedExpression.firebase, Right(0.0))
-                    Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
-                  }
-                val storedSecondArgument =
-                  if (right) {
-                    val storedValue = Remote(storedExpression.firebase, Right(0.0))
-                    Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
-                  } else {
-                    Remote(storedExpression.firebase, Right(expression))
-                  }
-                val newValue =
-                  FunctionCall(
-                    functionType = storedFunctionType,
-                    firstArgument = storedFirstArgument,
-                    secondArgument = storedSecondArgument
-                  )
-                val childKey =
-                  if (right) mappings.secondArgumentKey else mappings.firstArgumentKey
-                List(
-                  Command(
-                    if (right) s"□${input}_" else s"_${input}□",
-                    s"Apply $input",
-                    Callback {
-                      mappings.expression.set(storedExpression.firebase, newValue)
-                    },
-                    SlotId(storedExpression.firebase.child(childKey).toString, ContentSlot)
-                  )
+        val getCommands =
+          (input: String) => {
+            functionTypeStringValues.map(_.swap).get(input).map(functionType => {
+              val storedFunctionType =
+                Remote(storedExpression.firebase, Right(functionType))
+              val storedFirstArgument =
+                if (right) {
+                  Remote(storedExpression.firebase, Right(expression))
+                } else {
+                  val storedValue = Remote(storedExpression.firebase, Right(0.0))
+                  Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
+                }
+              val storedSecondArgument =
+                if (right) {
+                  val storedValue = Remote(storedExpression.firebase, Right(0.0))
+                  Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
+                } else {
+                  Remote(storedExpression.firebase, Right(expression))
+                }
+              val newValue =
+                FunctionCall(
+                  functionType = storedFunctionType,
+                  firstArgument = storedFirstArgument,
+                  secondArgument = storedSecondArgument
                 )
-              }).getOrElse(List())
-            },
-          deleteCallback = Callback {
+              val childKey =
+                if (right) mappings.secondArgumentKey else mappings.firstArgumentKey
+              List(
+                Command(
+                  if (right) s"□${input}_" else s"_${input}□",
+                  s"Apply $input",
+                  Callback {
+                    mappings.expression.set(storedExpression.firebase, newValue)
+                  },
+                  SlotId(storedExpression.firebase.child(childKey).toString, ContentSlot)
+                )
+              )
+            }).getOrElse(List())
+          }
+        val deleteCallback =
+          Callback {
             val storedValue = Remote(storedExpression.firebase, Right(0.0))
             mappings.expression.set(storedExpression.firebase, NumberLiteral(value = storedValue))
           }
+        MenuContent(
+          getCommands = getCommands,
+          deleteCallback = deleteCallback
         )
       })
     }
