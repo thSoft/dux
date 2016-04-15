@@ -169,6 +169,14 @@ object Render {
                   event.preventDefault()
                 }
               }
+            def handleDelete(slotTypeToCheck: SlotType) = {
+              CallbackTo.pure(editorState.input).flatMap(input => {
+                if ((slotTypeToCheck == slotType) && (editorState.input == ""))
+                  menuContent.deleteCallback
+                else
+                  Callback.empty
+              })
+            }
             event.key match {
               case KeyValue.ArrowDown =>
                 moveCommandIndex(1)
@@ -191,19 +199,9 @@ object Render {
                   ()
                 }).getOrElse(Callback.empty)
               case KeyValue.Backspace =>
-                CallbackTo.pure(editorState.input).flatMap(input => {
-                  if ((slotType == RightSlot) && (editorState.inputCaretIndex == 0))
-                    menuContent.deleteCallback
-                  else
-                    Callback.empty
-                })
+                handleDelete(RightSlot)
               case KeyValue.Delete =>
-                CallbackTo.pure(editorState.input).flatMap(input => {
-                  if ((slotType == LeftSlot) && (editorState.inputCaretIndex == editorState.input.length))
-                    menuContent.deleteCallback
-                  else
-                    Callback.empty
-                })
+                handleDelete(LeftSlot)
               case _ => Callback.empty
             }
           })
