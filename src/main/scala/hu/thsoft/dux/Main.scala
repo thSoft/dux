@@ -31,7 +31,6 @@ object Main extends JSApp {
     val container = document.createElement("div")
     document.body.appendChild(container)
     view.foreach(element => ReactDOM.render(element, container))
-    editorState.foreach(println)
   }
 
 }
