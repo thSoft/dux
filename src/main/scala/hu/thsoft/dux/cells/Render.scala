@@ -25,8 +25,8 @@ object Render {
   def apply[CellId](root: Cell[CellId], editorState: Option[EditorState[CellId]], editorStateObserver: Observer[Option[EditorState[CellId]]]): ReactElement = {
 
     case class Slot[CellId](
-      initialInput: String,
-      id: SlotId[CellId]
+      id: SlotId[CellId],
+      initialInput: String
     )
 
     lazy val slotZipper = makeSlotList(root).toStream.toZipper
@@ -34,7 +34,14 @@ object Render {
     def makeSlotList(cell: Cell[CellId]): List[Slot[CellId]] = {
       def slotList(menu: Menu[CellId], slotType: SlotType) = {
         val initialInput = getInitialInput(cell, slotType)
-        if (menu.isDefined) List(Slot(initialInput, SlotId(cell.id, slotType))) else List()
+        if (menu.isDefined)
+          List(
+            Slot(
+              id = SlotId(cellId = cell.id, slotType = slotType),
+              initialInput = initialInput
+            )
+          )
+        else List()
       }
       val contentSlotList =
         cell.content match {
@@ -70,7 +77,7 @@ object Render {
     def renderCell(cell: Cell[CellId]): ReactElement = {
       val leftSlot = renderSlot(cell, LeftSlot, sideMenuTagMod(cell.content.leftMenu))
       val rightSlot = renderSlot(cell, RightSlot, sideMenuTagMod(cell.content.rightMenu))
-      val contentSlot: ReactElement =
+      val contentSlot =
         <.span(
           cell.content match {
             case content: AtomicContent[CellId] =>
@@ -90,12 +97,23 @@ object Render {
       )
     }
 
-    def renderSlot(cell: Cell[CellId], slotType: SlotType, element: TagMod): ReactElement = {
+    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): ReactElement = {
+      val slot =
+        Slot(
+          id = SlotId(cellId = cell.id, slotType = slotType),
+          initialInput = getInitialInput(cell, slotType)
+        )
+      val onClick =
+        ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+          event.stopPropagation()
+          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
+          editorStateObserver.onNext(Some(newEditorState))
+        })
       val menu =
         if (selected(cell)) {
           editorState.flatMap(editorState => {
             if (editorState.selection.slotType == slotType) {
-              val selectedMenu: Menu[CellId] =
+              val selectedMenu =
                 slotType match {
                   case LeftSlot => cell.content.leftMenu
                   case RightSlot => cell.content.rightMenu
@@ -108,28 +126,20 @@ object Render {
               selectedMenu.map(menuContent => {
                 renderMenu(cell, slotType, editorState, menuContent)
               })
-            } else {
-              None
-            }
+            } else None
           })
         } else None
       <.span(
-        element,
-        ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
-          event.stopPropagation()
-          val slot = Slot(getInitialInput(cell, slotType), SlotId(cell.id, slotType))
-          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
-          editorStateObserver.onNext(Some(newEditorState))
-        }),
-        Styles.slot,
-        menu
+        tagMod,
+        onClick,
+        menu,
+        Styles.slot
       )
     }
 
     def renderMenu(cell: Cell[CellId], slotType: SlotType, editorState: EditorState[CellId], menuContent: MenuContent[CellId]): ReactElement = {
       val commands = menuContent.getCommands(editorState.input)
-      <.div(
-        Styles.menu,
+      val inputView =
         <.input(
           ^.autoFocus := true,
           ^.value := editorState.input,
@@ -145,7 +155,7 @@ object Render {
                 event.preventDefault()
                 editorStateObserver.onNext(Some(editorState.copy(selectedCommandIndex = Math.floorMod(editorState.selectedCommandIndex + delta, commands.size))))
               }
-            def doNavigate(right: Boolean): Callback =
+            def doNavigate(right: Boolean) =
               Callback {
                 val atStart = event.target.selectionStart == 0
                 val atEnd = event.target.selectionEnd == editorState.input.length
@@ -170,7 +180,13 @@ object Render {
                 doNavigate(true)
               case KeyValue.Enter =>
                 commands.lift(editorState.selectedCommandIndex).map(command => command.callback.thenRun {
-                  val nextEditorState = EditorState(command.nextSlotId, "", 0, 0)
+                  val nextEditorState =
+                    EditorState(
+                      selection = command.nextSlotId,
+                      input = "",
+                      inputCaretIndex = 0,
+                      selectedCommandIndex = 0
+                    )
                   editorStateObserver.onNext(Some(nextEditorState))
                   ()
                 }).getOrElse(Callback.empty)
@@ -191,11 +207,12 @@ object Render {
               case _ => Callback.empty
             }
           })
-        ),
+        )
+      val commandsView =
         <.div(
           commands.zipWithIndex.map { case (command, index) =>
             <.div(
-              index == editorState.selectedCommandIndex ?= Styles.selectedCommand,
+              (index == editorState.selectedCommandIndex) ?= Styles.selectedCommand,
               <.div(
                 command.text
               ),
@@ -206,6 +223,10 @@ object Render {
             )
           }
         )
+      <.div(
+        Styles.menu,
+        inputView,
+        commandsView
       )
     }
 
@@ -216,7 +237,12 @@ object Render {
     }
 
     def makeEditorState(slot: Slot[CellId], inputCaretIndex: Int): EditorState[CellId] = {
-      EditorState(slot.id, slot.initialInput, inputCaretIndex, 0)
+      EditorState(
+        selection = slot.id,
+        input = slot.initialInput,
+        inputCaretIndex = inputCaretIndex,
+        selectedCommandIndex = 0
+      )
     }
 
     renderCell(root)

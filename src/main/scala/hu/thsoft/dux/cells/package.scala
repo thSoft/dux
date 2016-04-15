@@ -8,18 +8,28 @@ import japgolly.scalajs.react.vdom.prefix_<^._
 
 package object cells {
 
-  type Menu[CellId] =
-    Option[MenuContent[CellId]]
-
-  case class MenuContent[CellId](
-    getCommands: String => List[Command[CellId]],
-    deleteCallback: Callback
-  )
-
   case class Cell[CellId](
     id: CellId,
     content: CellContent[CellId]
   )
+
+  def setLeftMenu[CellId](cell: Cell[CellId], leftMenu: Menu[CellId]): Cell[CellId] = {
+    val newContent: CellContent[CellId] =
+      cell.content match {
+        case content: AtomicContent[CellId] => content.copy(leftMenu = leftMenu)
+        case content: CompositeContent[CellId] => content.copy(leftMenu = leftMenu)
+      }
+    cell.copy(content = newContent)
+  }
+
+  def setRightMenu[CellId](cell: Cell[CellId], rightMenu: Menu[CellId]): Cell[CellId] = {
+    val newContent: CellContent[CellId] =
+      cell.content match {
+        case content: AtomicContent[CellId] => content.copy(rightMenu = rightMenu)
+        case content: CompositeContent[CellId] => content.copy(rightMenu = rightMenu)
+      }
+    cell.copy(content = newContent)
+  }
 
   sealed trait CellContent[CellId] {
     def leftMenu: Menu[CellId]
@@ -40,40 +50,46 @@ package object cells {
   ) extends CellContent[CellId]
 
   def atomicContent[CellId](element: ReactElement, stringValue: String): AtomicContent[CellId] = {
-    AtomicContent(element, stringValue, None, None, None)
+    AtomicContent(
+      element = element,
+      stringValue = stringValue,
+      menu = None,
+      leftMenu = None,
+      rightMenu = None
+    )
   }
 
   def compositeContent[CellId](children: Cell[CellId]*): CompositeContent[CellId] = {
-    CompositeContent(children.toList, EmptyTag, None, None)
+    CompositeContent(
+      children = children.toList,
+      tagMod = EmptyTag,
+      leftMenu = None,
+      rightMenu = None
+    )
   }
 
   def compositeContent[CellId](children: List[Cell[CellId]], tagMod: TagMod = EmptyTag): CompositeContent[CellId] = {
-    CompositeContent(children, tagMod, None, None)
+    CompositeContent(
+      children = children,
+      tagMod = tagMod,
+      leftMenu = None,
+      rightMenu = None
+    )
   }
 
-  def setLeftMenu[CellId](cell: Cell[CellId], leftMenu: Menu[CellId]): Cell[CellId] = {
-    val newContent: CellContent[CellId] =
-      cell.content match {
-        case content: AtomicContent[CellId] => content.copy(leftMenu = leftMenu)
-        case content: CompositeContent[CellId] => content.copy(leftMenu = leftMenu)
-      }
-    cell.copy(content = newContent)
-  }
+  type Menu[CellId] =
+    Option[MenuContent[CellId]]
 
-  def setRightMenu[CellId](cell: Cell[CellId], rightMenu: Menu[CellId]): Cell[CellId] = {
-    val newContent: CellContent[CellId] =
-      cell.content match {
-        case content: AtomicContent[CellId] => content.copy(rightMenu = rightMenu)
-        case content: CompositeContent[CellId] => content.copy(rightMenu = rightMenu)
-      }
-    cell.copy(content = newContent)
-  }
+  case class MenuContent[CellId](
+    getCommands: String => List[Command[CellId]],
+    deleteCallback: Callback
+  )
 
-  case class EditorState[CellId](
-    selection: SlotId[CellId],
-    input: String,
-    inputCaretIndex: Int,
-    selectedCommandIndex: Int
+  case class Command[CellId](
+    text: String,
+    description: String,
+    callback: Callback,
+    nextSlotId: SlotId[CellId]
   )
 
   case class SlotId[CellId](
@@ -86,11 +102,11 @@ package object cells {
   case object ContentSlot extends SlotType
   case object RightSlot extends SlotType
 
-  case class Command[CellId](
-    text: String,
-    description: String,
-    callback: Callback,
-    nextSlotId: SlotId[CellId]
+  case class EditorState[CellId](
+    selection: SlotId[CellId],
+    input: String,
+    inputCaretIndex: Int,
+    selectedCommandIndex: Int
   )
 
 }

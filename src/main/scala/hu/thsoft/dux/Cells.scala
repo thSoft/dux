@@ -53,12 +53,16 @@ object Cells {
         Try { input.toDouble }.toOption.map(newValue => {
           List(
             Command(
-              input,
-              s"Change to $input",
-              Callback {
+              text = input,
+              description = s"Change to $input",
+              callback = Callback {
                 Mapping.double.set(storedDouble.firebase, newValue)
               },
-              SlotId(storedDouble.firebase.toString, ContentSlot)
+              nextSlotId =
+                SlotId(
+                  cellId = storedDouble.firebase.toString,
+                  slotType = ContentSlot
+                )
             )
           )
         }).getOrElse(List())
@@ -96,12 +100,16 @@ object Cells {
         functionTypeStringValues.map(_.swap).get(input).map(newValue => {
           List(
             Command(
-              input,
-              s"Change to $input",
-              Callback {
+              text = input,
+              description = s"Change to $input",
+              callback = Callback {
                 mappings.functionType.set(storedFunctionType.firebase, newValue)
               },
-              SlotId(storedFunctionType.firebase.toString, ContentSlot)
+              nextSlotId =
+                SlotId(
+                  cellId = storedFunctionType.firebase.toString,
+                  slotType = ContentSlot
+                )
             )
           )
         }).getOrElse(List())
@@ -181,14 +189,21 @@ object Cells {
                 )
               val childKey =
                 if (right) mappings.secondArgumentKey else mappings.firstArgumentKey
+              val expressionValueId =
+                Mapping.valueChild(storedExpression.firebase)
               List(
                 Command(
-                  if (right) s"□${input}_" else s"_${input}□",
-                  s"Apply $input",
-                  Callback {
+                  text = if (right) s"□${input}_" else s"_${input}□",
+                  description = s"Apply $input",
+                  callback = Callback {
                     mappings.expression.set(storedExpression.firebase, newValue)
                   },
-                  SlotId(storedExpression.firebase.child(childKey).toString, ContentSlot)
+                  nextSlotId =
+                    SlotId(
+                      cellId =
+                        Mapping.valueChild(expressionValueId.child(childKey)).child(mappings.valueKey).toString, // XXX this is hardcoded and unchecked
+                      slotType = ContentSlot
+                    )
                 )
               )
             }).getOrElse(List())

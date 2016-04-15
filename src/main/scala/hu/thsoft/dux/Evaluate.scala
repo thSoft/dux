@@ -20,7 +20,7 @@ object Evaluate {
     either.left.map(invalid => InvalidExpression(invalid))
 
   def apply(storedExpression: Stored[Expression]): Evaluation = {
-    val result: Either[Failure, Success] =
+    val result =
       wrap(storedExpression.value).right.flatMap(expression => {
         expression match {
           case numberLiteral: NumberLiteral =>

@@ -26,8 +26,9 @@ package object mappings {
 
   lazy val numberLiteral: Mapping[NumberLiteral] =
     Mapping.record(NumberLiteral)(
-      Field("value", Mapping.double, _.value)
+      Field(valueKey, Mapping.double, _.value)
     )
+  val valueKey = "value"
 
   lazy val functionCall: Mapping[FunctionCall] =
     Mapping.record(FunctionCall)(
