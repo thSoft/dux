@@ -82,15 +82,25 @@ package object cells {
 
   case class MenuContent[CellId](
     getCommands: String => List[Command[CellId]],
-    deleteCallback: Callback
+    deleteCommand: Command[CellId]
   )
 
   case class Command[CellId](
     text: String,
     description: String,
     callback: Callback,
-    nextSlotId: SlotId[CellId]
+    navigation: Navigation
   )
+
+  def command[CellId](callback: Callback, navigation: Navigation): Command[CellId] = {
+    Command("", "", callback, navigation)
+  }
+
+  sealed trait Navigation
+  case object NoNavigation extends Navigation
+  case class NavigateTo[CellId](slotId: SlotId[CellId]) extends Navigation
+  case object NavigateRight extends Navigation
+  case object NavigateLeft extends Navigation
 
   case class SlotId[CellId](
     cellId: CellId,

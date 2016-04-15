@@ -150,12 +150,22 @@ object Render {
             editorStateObserver.onNext(Some(editorState.copy(input = event.target.value)))
           }),
           ^.onKeyDown ==> ((event: SyntheticKeyboardEvent[HTMLInputElement]) => {
-            def moveCommandIndex(delta: Int) =
+            def moveCommandIndex(delta: Int): Callback =
               Callback {
                 event.preventDefault()
                 editorStateObserver.onNext(Some(editorState.copy(selectedCommandIndex = Math.floorMod(editorState.selectedCommandIndex + delta, commands.size))))
               }
-            def doNavigate(right: Boolean) =
+            def handleDelete(slotTypeToCheck: SlotType): Callback = {
+              Callback.ifTrue(
+                (slotTypeToCheck == slotType) && (editorState.input == ""),
+                menuContent.deleteCommand.callback >>
+                performNavigation(menuContent.deleteCommand.navigation).thenRun {
+                  event.preventDefault()
+                  ()
+                }
+              )
+            }
+            def doNavigate(right: Boolean): Callback =
               Callback {
                 val atStart = event.target.selectionStart == 0
                 val atEnd = event.target.selectionEnd == editorState.input.length
@@ -169,13 +179,24 @@ object Render {
                   event.preventDefault()
                 }
               }
-            def handleDelete(slotTypeToCheck: SlotType) = {
-              CallbackTo.pure(editorState.input).flatMap(input => {
-                if ((slotTypeToCheck == slotType) && (editorState.input == ""))
-                  menuContent.deleteCallback
-                else
-                  Callback.empty
-              })
+            def performNavigation(navigation: Navigation): Callback = {
+              navigation match {
+                case NoNavigation => Callback.empty
+                case navigation: NavigateTo[CellId] =>
+                  Callback {
+                    val nextEditorState =
+                      EditorState(
+                        selection = navigation.slotId,
+                        input = "",
+                        inputCaretIndex = 0,
+                        selectedCommandIndex = 0
+                      )
+                    editorStateObserver.onNext(Some(nextEditorState))
+                    ()
+                  }
+                case NavigateLeft => doNavigate(false)
+                case NavigateRight => doNavigate(true)
+              }
             }
             event.key match {
               case KeyValue.ArrowDown =>
@@ -187,17 +208,9 @@ object Render {
               case KeyValue.ArrowRight =>
                 doNavigate(true)
               case KeyValue.Enter =>
-                commands.lift(editorState.selectedCommandIndex).map(command => command.callback.thenRun {
-                  val nextEditorState =
-                    EditorState(
-                      selection = command.nextSlotId,
-                      input = "",
-                      inputCaretIndex = 0,
-                      selectedCommandIndex = 0
-                    )
-                  editorStateObserver.onNext(Some(nextEditorState))
-                  ()
-                }).getOrElse(Callback.empty)
+                commands.lift(editorState.selectedCommandIndex).map(command =>
+                  command.callback >> performNavigation(command.navigation)
+                ).getOrElse(Callback.empty)
               case KeyValue.Backspace =>
                 handleDelete(RightSlot)
               case KeyValue.Delete =>

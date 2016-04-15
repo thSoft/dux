@@ -52,17 +52,13 @@ object Cells {
       (input: String) =>
         Try { input.toDouble }.toOption.map(newValue => {
           List(
-            Command(
+            Command[String](
               text = input,
               description = s"Change to $input",
               callback = Callback {
                 Mapping.double.set(storedDouble.firebase, newValue)
               },
-              nextSlotId =
-                SlotId(
-                  cellId = storedDouble.firebase.toString,
-                  slotType = ContentSlot
-                )
+              navigation = NavigateRight
             )
           )
         }).getOrElse(List())
@@ -73,7 +69,7 @@ object Cells {
       ).copy(menu =
         Some(MenuContent(
           getCommands = getCommands,
-          deleteCallback = Callback.empty
+          deleteCommand = command(Callback.empty, NoNavigation)
         ))
       )
     })
@@ -99,17 +95,13 @@ object Cells {
       (input: String) =>
         functionTypeStringValues.map(_.swap).get(input).map(newValue => {
           List(
-            Command(
+            Command[String](
               text = input,
               description = s"Change to $input",
               callback = Callback {
                 mappings.functionType.set(storedFunctionType.firebase, newValue)
               },
-              nextSlotId =
-                SlotId(
-                  cellId = storedFunctionType.firebase.toString,
-                  slotType = ContentSlot
-                )
+              navigation = NavigateRight
             )
           )
         }).getOrElse(List())
@@ -123,7 +115,7 @@ object Cells {
       ).copy(menu =
         Some(MenuContent(
           getCommands = getCommands,
-          deleteCallback = Callback.empty
+          deleteCommand = command(Callback.empty, NoNavigation)
         ))
       )
     })
@@ -192,18 +184,18 @@ object Cells {
               val expressionValueId =
                 Mapping.valueChild(storedExpression.firebase)
               List(
-                Command(
+                Command[String](
                   text = if (right) s"□${input}_" else s"_${input}□",
                   description = s"Apply $input",
                   callback = Callback {
                     mappings.expression.set(storedExpression.firebase, newValue)
                   },
-                  nextSlotId =
-                    SlotId(
+                  navigation =
+                    NavigateTo(SlotId(
                       cellId =
                         Mapping.valueChild(expressionValueId.child(childKey)).child(mappings.valueKey).toString, // XXX this is hardcoded and unchecked
                       slotType = ContentSlot
-                    )
+                    ))
                 )
               )
             }).getOrElse(List())
@@ -215,7 +207,13 @@ object Cells {
           }
         MenuContent(
           getCommands = getCommands,
-          deleteCallback = deleteCallback
+          deleteCommand =
+            command(deleteCallback,
+              NavigateTo(SlotId(
+                cellId = Mapping.valueChild(storedExpression.firebase).child(mappings.valueKey).toString,
+                slotType = ContentSlot
+              ))
+            )
         )
       })
     }
