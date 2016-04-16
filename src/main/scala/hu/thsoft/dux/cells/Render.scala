@@ -146,7 +146,7 @@ object Render {
           ^.onFocus ==> ((event: SyntheticFocusEvent[HTMLInputElement]) => Callback {
             event.target.selectionStart = editorState.inputCaretIndex
           }),
-          ^.onInput ==> ((event: SyntheticCompositionEvent[HTMLInputElement]) => Callback {
+          ^.onChange ==> ((event: SyntheticCompositionEvent[HTMLInputElement]) => Callback {
             editorStateObserver.onNext(Some(editorState.copy(input = event.target.value)))
           }),
           ^.onKeyDown ==> ((event: SyntheticKeyboardEvent[HTMLInputElement]) => {
