@@ -239,13 +239,14 @@ object Cells {
   def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedWorkspace)(workspace => {
       compositeContent(
-        fromStored(workspace.views)(views =>
+        List(fromStored(workspace.views)(views =>
           compositeContent(
             views.map(view =>
               fromExpressionView(view)
             )
           )
-        )
+        )),
+        Styles.workspace
       )
     })
 

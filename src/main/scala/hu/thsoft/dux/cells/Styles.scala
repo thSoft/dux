@@ -11,11 +11,14 @@ object Styles extends StyleSheet.Inline {
     top(100 %%),
     left(0 px),
     display.block,
-    backgroundColor.lightgray
+    padding(2 px),
+    backgroundColor.lightgray,
+    borderRadius(3 px)
   )
 
   val selected = style(
-    backgroundColor.lightblue
+    backgroundColor(c"#B0D8FB"),
+    boxShadow := "0 0 1px 2px #6EA3CF"
   )
 
   val slot = style(

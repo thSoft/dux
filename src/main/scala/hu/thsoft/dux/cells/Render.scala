@@ -71,7 +71,7 @@ object Render {
     }
 
     def sideMenuTagMod(menu: Menu[CellId]): TagMod = {
-      if (menu.isDefined) " " else EmptyTag
+      if (menu.isDefined) " " else EmptyTag
     }
 
     def renderCell(cell: Cell[CellId]): ReactElement = {
