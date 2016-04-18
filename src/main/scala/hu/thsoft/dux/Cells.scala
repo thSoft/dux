@@ -185,7 +185,7 @@ object Cells {
                 Mapping.valueChild(storedExpression.firebase)
               List(
                 Command[String](
-                  text = if (right) s"□${input}_" else s"_${input}□",
+                  text = if (right) s"□ ${input} _" else s"_ ${input} □",
                   description = s"Apply $input",
                   callback = Callback {
                     mappings.expression.set(storedExpression.firebase, newValue)

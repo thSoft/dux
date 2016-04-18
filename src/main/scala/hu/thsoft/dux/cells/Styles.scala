@@ -5,6 +5,10 @@ import scalacss.Defaults._
 object Styles extends StyleSheet.Inline {
   import dsl._
 
+  val font = fontFace("Inconsolata")(
+    _.src("local(Inconsolata), url(https://fonts.gstatic.com/s/inconsolata/v12/BjAYBlHtW3CJxDcjzrnZCIgp9Q8gbYrhqGlRav_IXfk.woff2)")
+  )
+
   val menu = style(
     position.absolute,
     zIndex(Int.MaxValue),
@@ -27,13 +31,18 @@ object Styles extends StyleSheet.Inline {
 
   val selectedCommand = style(
     color.white,
-    backgroundColor.blue
+    backgroundColor(c"#3879D9")
   )
 
   val commandDescription = style(
      fontSize(80 %%),
      textAlign.right,
-     color.gray
+     color.lightgray
+  )
+
+  val input = style(
+    fontFamily(font),
+    fontSize(100 %%)
   )
 
 }

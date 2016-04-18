@@ -141,6 +141,7 @@ object Render {
       val commands = menuContent.getCommands(editorState.input)
       val inputView =
         <.input(
+          Styles.input,
           ^.autoFocus := true,
           ^.value := editorState.input,
           ^.onFocus ==> ((event: SyntheticFocusEvent[HTMLInputElement]) => Callback {
