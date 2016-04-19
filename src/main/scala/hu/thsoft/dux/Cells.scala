@@ -22,6 +22,8 @@ import scala.util.Try
 import hu.thsoft.firebasemodel.Mapping
 import hu.thsoft.firebasemodel.Remote
 import hu.thsoft.dux.Evaluate.Evaluation
+import hu.thsoft.firebase.Firebase
+import scala.concurrent.ExecutionContext
 
 object Cells {
 
@@ -163,13 +165,11 @@ object Cells {
                 if (right) {
                   Remote(storedExpression.firebase, Right(expression))
                 } else {
-                  val storedValue = Remote(storedExpression.firebase, Right(0.0))
-                  Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
+                  Remote(storedExpression.firebase, Right(defaultExpression(0)))
                 }
               val storedSecondArgument =
                 if (right) {
-                  val storedValue = Remote(storedExpression.firebase, Right(0.0))
-                  Remote(storedExpression.firebase, Right(NumberLiteral(value = storedValue)))
+                  Remote(storedExpression.firebase, Right(defaultExpression(0)))
                 } else {
                   Remote(storedExpression.firebase, Right(expression))
                 }
@@ -202,8 +202,7 @@ object Cells {
           }
         val deleteCallback =
           Callback {
-            val storedValue = Remote(storedExpression.firebase, Right(0.0))
-            mappings.expression.set(storedExpression.firebase, NumberLiteral(value = storedValue))
+            mappings.expression.set(storedExpression.firebase, defaultExpression(0))
           }
         MenuContent(
           getCommands = getCommands,
@@ -224,9 +223,17 @@ object Cells {
     cellWithBothMenus
   }
 
-  def fromExpressionView(storedExpressionView: Stored[ExpressionView]): Cell[String] =
+  def defaultExpression(double: Double): Expression = {
+    NumberLiteral(value = wrap(double))
+  }
+
+  def wrap[T](value: T): Stored[T] = {
+    Remote(new Firebase("https://thsoft.firebaseio.com"), Right(value))
+  }
+
+  def fromExpressionView(storedExpressionView: Stored[ExpressionView], storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedExpressionView)(expressionView => {
-      compositeContent(
+      val content = compositeContent(
         List(
           fromStored(expressionView.expression)(storedExpression =>
             compositeContent(fromExpression(storedExpression))
@@ -234,20 +241,60 @@ object Cells {
         ),
         Styles.expressionView
       )
+      val menu =
+        Some(MenuContent(
+          getCommands = expressionViewListGetCommands(storedWorkspace),
+          deleteCommand = command(Callback {
+            storedExpressionView.firebase.remove
+          }, NavigateRight)
+        ))
+      content.copy(leftMenu = menu, rightMenu = menu)
     })
+
+  def expressionViewListGetCommands(storedWorkspace: Stored[Workspace]): String => List[Command[String]] =
+    input => {
+      Try { input.toDouble }.toOption.map(newValue => {
+        List(
+          Command[String](
+            text = input,
+            description = "Insert number literal",
+            callback = CallbackTo {
+              implicit val executionContext = ExecutionContext.global
+              val expressionsParent = new Firebase("https://thsoft.firebaseio.com/DUX/test/Expressions")
+              for (
+                newStoredExpression <- mappings.expression.push(expressionsParent, defaultExpression(newValue));
+                expressionViewsParent = storedWorkspace.firebase.child(mappings.viewsKey);
+                expressionView = ExpressionView(expression = wrap(newStoredExpression));
+                newStoredExpressionView <- mappings.expressionView.push(expressionViewsParent, expressionView)
+              ) yield newStoredExpressionView
+            },
+            navigation = NoNavigation
+          )
+        )
+      }).getOrElse(List())
+    }
 
   def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedWorkspace)(workspace => {
-      compositeContent(
-        List(fromStored(workspace.views)(views =>
-          compositeContent(
-            views.map(view =>
-              fromExpressionView(view)
+      if (workspace.views.value.isLeft) {
+        atomicContent[String](<.span("..."), "").copy(menu =
+          Some(MenuContent(
+            getCommands = expressionViewListGetCommands(storedWorkspace),
+            deleteCommand = command(Callback.empty, NoNavigation)
+          ))
+        )
+      } else {
+        compositeContent(
+          List(fromStored(workspace.views)(views => {
+            compositeContent(
+              views.map(view =>
+                fromExpressionView(view, storedWorkspace)
+              )
             )
-          )
-        )),
-        Styles.workspace
-      )
+          })),
+          Styles.workspace
+        )
+      }
     })
 
 }

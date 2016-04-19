@@ -42,12 +42,14 @@ package object mappings {
 
   lazy val expressionView: Mapping[ExpressionView] =
     Mapping.record(ExpressionView)(
-      Field("expression", Mapping.reference(expression), _.expression)
+      Field(expressionKey, Mapping.reference(expression), _.expression)
     )
+  val expressionKey = "expression"
 
   lazy val workspace: Mapping[Workspace] =
     Mapping.record(Workspace)(
-      Field("views", Mapping.list(expressionView), _.views)
+      Field(viewsKey, Mapping.list(expressionView), _.views)
     )
+  val viewsKey = "views"
 
 }
