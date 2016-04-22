@@ -10,8 +10,6 @@ import japgolly.scalajs.react.SyntheticEvent
 import japgolly.scalajs.react.SyntheticKeyboardEvent
 import japgolly.scalajs.react.SyntheticMouseEvent
 import japgolly.scalajs.react.vdom.prefix_<^._
-import monifu.reactive.Channel
-import monifu.reactive.Observer
 import scalacss.ScalaCssReact._
 import japgolly.scalajs.react._
 import org.scalajs.dom.ext.KeyValue
@@ -19,6 +17,7 @@ import org.scalajs.dom
 import scalaz.syntax.std.stream._
 import org.scalajs.dom.raw.HTMLElement
 import org.scalajs.dom.raw.Console
+import monix.reactive.Observer
 
 object Render {
 

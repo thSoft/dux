@@ -11,8 +11,6 @@ import japgolly.scalajs.react.SyntheticEvent
 import japgolly.scalajs.react.SyntheticKeyboardEvent
 import japgolly.scalajs.react.SyntheticMouseEvent
 import japgolly.scalajs.react.vdom.prefix_<^._
-import monifu.reactive.Channel
-import monifu.reactive.Observer
 import scalacss.ScalaCssReact._
 import japgolly.scalajs.react._
 import org.scalajs.dom.ext.KeyValue
