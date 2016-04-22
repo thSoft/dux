@@ -88,19 +88,22 @@ package object cells {
   case class Command[CellId](
     text: String,
     description: String,
-    callback: Callback,
-    navigation: Navigation
+    callback: Navigator[CellId] => Callback
   )
 
-  def command[CellId](callback: Callback, navigation: Navigation): Command[CellId] = {
-    Command("", "", callback, navigation)
+  def nopCommand[CellId](): Command[CellId] = {
+    command(_ => Callback.empty)
   }
 
-  sealed trait Navigation
-  case object NoNavigation extends Navigation
-  case class NavigateTo[CellId](slotId: SlotId[CellId]) extends Navigation
-  case object NavigateRight extends Navigation
-  case object NavigateLeft extends Navigation
+  def command[CellId](callback: Navigator[CellId] => Callback): Command[CellId] = {
+    Command("", "", callback)
+  }
+
+  trait Navigator[CellId] {
+    def navigateTo(slotId: SlotId[CellId]): Unit
+    def navigateLeft: Unit
+    def navigateRight: Unit
+  }
 
   case class SlotId[CellId](
     cellId: CellId,

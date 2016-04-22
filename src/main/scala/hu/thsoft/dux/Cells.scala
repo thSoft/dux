@@ -55,10 +55,10 @@ object Cells {
             Command[String](
               text = input,
               description = s"Change to $input",
-              callback = Callback {
+              callback = navigator => Callback {
                 Mapping.double.set(storedDouble.firebase, newValue)
-              },
-              navigation = NavigateRight
+                navigator.navigateRight
+              }
             )
           )
         }).getOrElse(List())
@@ -69,7 +69,7 @@ object Cells {
       ).copy(menu =
         Some(MenuContent(
           getCommands = getCommands,
-          deleteCommand = command(Callback.empty, NoNavigation)
+          deleteCommand = nopCommand[String]
         ))
       )
     })
@@ -98,10 +98,10 @@ object Cells {
             Command[String](
               text = input,
               description = s"Change to $input",
-              callback = Callback {
+              callback = navigator => Callback {
                 mappings.functionType.set(storedFunctionType.firebase, newValue)
-              },
-              navigation = NavigateRight
+                navigator.navigateRight
+              }
             )
           )
         }).getOrElse(List())
@@ -115,7 +115,7 @@ object Cells {
       ).copy(menu =
         Some(MenuContent(
           getCommands = getCommands,
-          deleteCommand = command(Callback.empty, NoNavigation)
+          deleteCommand = nopCommand[String]
         ))
       )
     })
@@ -185,32 +185,29 @@ object Cells {
                 Command[String](
                   text = if (right) s"□ ${input} _" else s"_ ${input} □",
                   description = s"Apply $input",
-                  callback = Callback {
+                  callback = navigator => Callback {
                     mappings.expression.set(storedExpression.firebase, newValue)
-                  },
-                  navigation =
-                    NavigateTo(SlotId(
+                    navigator.navigateTo(SlotId(
                       cellId =
                         Mapping.valueChild(expressionValueId.child(childKey)).child(mappings.valueKey).toString, // XXX this is hardcoded and unchecked
                       slotType = ContentSlot
                     ))
+                  }
                 )
               )
             }).getOrElse(List())
           }
         val deleteCallback =
-          Callback {
+          (navigator: Navigator[String]) => Callback {
             mappings.expression.set(storedExpression.firebase, defaultExpression(0))
+            navigator.navigateTo(SlotId(
+              cellId = Mapping.valueChild(storedExpression.firebase).child(mappings.valueKey).toString,
+              slotType = ContentSlot
+            ))
           }
         MenuContent(
           getCommands = getCommands,
-          deleteCommand =
-            command(deleteCallback,
-              NavigateTo(SlotId(
-                cellId = Mapping.valueChild(storedExpression.firebase).child(mappings.valueKey).toString,
-                slotType = ContentSlot
-              ))
-            )
+          deleteCommand = command(deleteCallback)
         )
       })
     }
@@ -242,9 +239,16 @@ object Cells {
       val menu =
         Some(MenuContent(
           getCommands = expressionViewListGetCommands(storedWorkspace),
-          deleteCommand = command(Callback {
+          deleteCommand = command((navigator: Navigator[String]) => Callback {
+            for (
+              expressionView <- storedExpressionView.value.right;
+              storedExpression <- expressionView.expression.value.right
+            ) {
+              storedExpression.firebase.remove
+            }
             storedExpressionView.firebase.remove
-          }, NavigateRight)
+            // TODO navigate
+          })
         ))
       content.copy(leftMenu = menu, rightMenu = menu)
     })
@@ -255,18 +259,23 @@ object Cells {
         List(
           Command[String](
             text = input,
-            description = "Insert number literal",
-            callback = CallbackTo {
+            description = "Add number literal",
+            callback = navigator => CallbackTo {
               implicit val executionContext = ExecutionContext.global
               val expressionsParent = new Firebase("https://thsoft.firebaseio.com/DUX/test/Expressions")
-              for (
+              val newStoredExpressionFuture = for (
                 newStoredExpression <- mappings.expression.push(expressionsParent, defaultExpression(newValue));
                 expressionViewsParent = storedWorkspace.firebase.child(mappings.viewsKey);
                 expressionView = ExpressionView(expression = wrap(newStoredExpression));
                 newStoredExpressionView <- mappings.expressionView.push(expressionViewsParent, expressionView)
-              ) yield newStoredExpressionView
-            },
-            navigation = NoNavigation
+              ) yield newStoredExpression
+              newStoredExpressionFuture.foreach(newStoredExpression =>
+                navigator.navigateTo(SlotId(
+                  cellId = newStoredExpression.firebase.toString,
+                  slotType = RightSlot
+                ))
+              )
+            }
           )
         )
       }).getOrElse(List())
@@ -274,25 +283,25 @@ object Cells {
 
   def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedWorkspace)(workspace => {
-      if (workspace.views.value.isLeft) {
-        atomicContent[String](<.span("..."), "").copy(menu =
-          Some(MenuContent(
-            getCommands = expressionViewListGetCommands(storedWorkspace),
-            deleteCommand = command(Callback.empty, NoNavigation)
-          ))
-        )
-      } else {
-        compositeContent(
-          List(fromStored(workspace.views)(views => {
+      compositeContent(
+        List(fromStored(workspace.views)(views => {
+          if (views.isEmpty) {
+            atomicContent[String](<.span("Enter expression here"), "").copy(menu =
+              Some(MenuContent(
+                getCommands = expressionViewListGetCommands(storedWorkspace),
+                deleteCommand = nopCommand[String]
+              ))
+            )
+          } else {
             compositeContent(
               views.map(view =>
                 fromExpressionView(view, storedWorkspace)
               )
             )
-          })),
-          Styles.workspace
-        )
-      }
+          }
+        })),
+        Styles.workspace
+      )
     })
 
 }
