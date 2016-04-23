@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+cd "${0%/*}/.."
 
 REPOSITORY=firebase-model
 git clone https://github.com/thSoft/$REPOSITORY.git
