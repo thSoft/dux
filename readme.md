@@ -2,10 +2,10 @@
 
 * Install [Eclipse Scala IDE](http://scala-ide.org/download/sdk.html)
 * Clone this repository
-* Run `sbt eclipse`
+* Run `scripts/setup.sh`
 * Import existing projects into workspace
 
 ## Develop
 
-* Run `sbt ~fastOptJS`
+* Run `scripts/develop.sh`
 * Open `index.html`
