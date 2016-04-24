@@ -12,7 +12,7 @@ object Styles extends StyleSheet.Inline {
   val menu = style(
     position.absolute,
     zIndex(Int.MaxValue),
-    top(100 %%),
+    top(120 %%),
     left(0 px),
     display.block,
     padding(2 px),
@@ -20,13 +20,21 @@ object Styles extends StyleSheet.Inline {
     borderRadius(3 px)
   )
 
-  val selected = style(
-    backgroundColor(c"#B0D8FB"),
+  val selectedCell = style(
     boxShadow := "0 0 1px 2px #6EA3CF"
   )
 
+  val selectedSlot = style(
+    borderWidth(1 px),
+    borderColor.lightgray,
+    borderStyle.solid,
+    borderRadius(2 px),
+    padding(0 px)
+  )
+
   val slot = style(
-    position.relative
+    position.relative,
+    minHeight(100 %%)
   )
 
   val selectedCommand = style(

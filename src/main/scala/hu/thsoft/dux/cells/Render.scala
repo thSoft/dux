@@ -18,6 +18,7 @@ import scalaz.syntax.std.stream._
 import org.scalajs.dom.raw.HTMLElement
 import org.scalajs.dom.raw.Console
 import monix.reactive.Observer
+import org.scalajs.dom.raw.HTMLSpanElement
 
 object Render {
 
@@ -65,17 +66,17 @@ object Render {
       }
     }
 
-    def selected(cell: Cell[CellId]): Boolean = {
+    def cellSelected(cell: Cell[CellId]): Boolean = {
       editorState.map(_.selection.cellId == cell.id).getOrElse(false)
     }
 
-    def sideMenuTagMod(menu: Menu[CellId]): TagMod = {
-      if (menu.isDefined) " " else EmptyTag
+    def slotSelected(slotId: SlotId[CellId]): Boolean = {
+      editorState.map(_.selection == slotId).getOrElse(false)
     }
 
     def renderCell(cell: Cell[CellId]): ReactElement = {
-      val leftSlot = renderSlot(cell, LeftSlot, sideMenuTagMod(cell.content.leftMenu))
-      val rightSlot = renderSlot(cell, RightSlot, sideMenuTagMod(cell.content.rightMenu))
+      val leftSlot = renderSlot(cell, LeftSlot, " ")
+      val rightSlot = renderSlot(cell, RightSlot, " ")
       val contentSlot =
         <.span(
           cell.content match {
@@ -87,7 +88,7 @@ object Render {
                 content.tagMod
               )
           },
-          selected(cell) ?= Styles.selected
+          cellSelected(cell) ?= Styles.selectedCell
         )
       <.span(
         leftSlot,
@@ -96,44 +97,47 @@ object Render {
       )
     }
 
-    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): ReactElement = {
-      val slot =
-        Slot(
-          id = SlotId(cellId = cell.id, slotType = slotType),
-          initialInput = getInitialInput(cell, slotType)
-        )
-      val onClick =
-        ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
-          event.stopPropagation()
-          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
-          editorStateObserver.onNext(Some(newEditorState))
-        })
+    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): Option[ReactElement] = {
       val menu =
-        if (selected(cell)) {
-          editorState.flatMap(editorState => {
-            if (editorState.selection.slotType == slotType) {
-              val selectedMenu =
-                slotType match {
-                  case LeftSlot => cell.content.leftMenu
-                  case RightSlot => cell.content.rightMenu
-                  case ContentSlot =>
-                    cell.content match {
-                      case content: AtomicContent[CellId] => content.menu
-                      case content: CompositeContent[CellId] => None
-                    }
-                }
-              selectedMenu.map(menuContent => {
+        slotType match {
+          case LeftSlot => cell.content.leftMenu
+          case RightSlot => cell.content.rightMenu
+          case ContentSlot =>
+            cell.content match {
+              case content: AtomicContent[CellId] => content.menu
+              case content: CompositeContent[CellId] => None
+            }
+        }
+      menu.map(menuContent => {
+        val slotId = SlotId(cellId = cell.id, slotType = slotType)
+        val slot =
+          Slot(
+            id = slotId,
+            initialInput = getInitialInput(cell, slotType)
+          )
+        val onClick =
+          ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+            event.stopPropagation()
+            val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
+            editorStateObserver.onNext(Some(newEditorState))
+          })
+        val selected = slotSelected(slotId)
+        val selectedMenu =
+          if (selected) {
+            editorState.flatMap(editorState => {
+              menu.map(menuContent => {
                 renderMenu(cell, slotType, editorState, menuContent)
               })
-            } else None
-          })
-        } else None
-      <.span(
-        tagMod,
-        onClick,
-        menu,
-        Styles.slot
-      )
+            })
+          } else None
+        <.span(
+          tagMod,
+          onClick,
+          selectedMenu,
+          Styles.slot,
+          selected ?= Styles.selectedSlot
+        )
+      })
     }
 
     def renderMenu(cell: Cell[CellId], slotType: SlotType, editorState: EditorState[CellId], menuContent: MenuContent[CellId]): ReactElement = {
