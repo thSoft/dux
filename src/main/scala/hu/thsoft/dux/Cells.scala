@@ -238,7 +238,7 @@ object Cells {
       )
       val menu =
         Some(MenuContent(
-          getCommands = expressionViewListGetCommands(storedWorkspace),
+          getCommands = input => List(),
           deleteCommand = command((navigator: Navigator[String]) => Callback {
             for (
               expressionView <- storedExpressionView.value.right;
@@ -253,7 +253,8 @@ object Cells {
       content.copy(leftMenu = menu, rightMenu = menu)
     })
 
-  def expressionViewListGetCommands(storedWorkspace: Stored[Workspace]): String => List[Command[String]] =
+  def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] = {
+    val getCommands: String => List[Command[String]] =
     input => {
       Try { input.toDouble }.toOption.map(newValue => {
         List(
@@ -280,28 +281,29 @@ object Cells {
         )
       }).getOrElse(List())
     }
-
-  def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedWorkspace)(workspace => {
       compositeContent(
         List(fromStored(workspace.views)(views => {
-          if (views.isEmpty) {
-            atomicContent[String](<.span("Enter expression here"), "").copy(menu =
-              Some(MenuContent(
-                getCommands = expressionViewListGetCommands(storedWorkspace),
-                deleteCommand = nopCommand[String]
-              ))
+          compositeContent(
+            views.map(view =>
+              fromExpressionView(view, storedWorkspace)
             )
-          } else {
-            compositeContent(
-              views.map(view =>
-                fromExpressionView(view, storedWorkspace)
+          )
+        })) :+ (
+          Cell(
+            id = storedWorkspace.firebase.child("_append").toString, // XXX special id
+            content =
+              atomicContent[String](<.span("...", ^.title := "Add expression"), "").copy(menu =
+                Some(MenuContent(
+                  getCommands = getCommands,
+                  deleteCommand = nopCommand[String]
+                ))
               )
-            )
-          }
-        })),
+          )
+        ),
         Styles.workspace
       )
     })
+  }
 
 }
