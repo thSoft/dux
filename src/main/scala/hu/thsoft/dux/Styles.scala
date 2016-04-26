@@ -9,10 +9,13 @@ object Styles extends StyleSheet.Inline {
     display.inlineBlock,
     padding(1 px),
     margin(1 px),
-    borderWidth(1 px),
-    borderColor.gray,
-    borderStyle.solid,
-    borderRadius(2 px)
+    &.hover(
+      padding(0 px),
+      borderWidth(1 px),
+      borderColor.gray,
+      borderStyle.solid,
+      borderRadius(2 px)
+    )
   )
 
   val functionType =

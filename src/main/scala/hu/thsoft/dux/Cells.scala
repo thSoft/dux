@@ -132,7 +132,7 @@ object Cells {
     )
   }
 
-  def fromExpression(storedExpression: Stored[Expression]): Cell[String] = {
+  def fromExpression(storedExpression: Stored[Expression], enclosingExpression: Option[Stored[Expression]]): Cell[String] = {
     val cell =
       fromStored(storedExpression)(expression => {
         val evaluation = Evaluate(storedExpression)
@@ -143,12 +143,15 @@ object Cells {
           expression match {
             case numberLiteral: NumberLiteral =>
               List(fromDouble(numberLiteral.value))
-            case functionCall: FunctionCall =>
+            case functionCall: FunctionCall => {
+              (if (enclosingExpression.isDefined) List(Cell(id = "(", content = atomicContent("("))) else List()) ++
               List(
-                fromExpression(functionCall.firstArgument),
+                fromExpression(functionCall.firstArgument, Some(storedExpression)),
                 fromFunctionType(functionCall.functionType),
-                fromExpression(functionCall.secondArgument)
-              )
+                fromExpression(functionCall.secondArgument, Some(storedExpression))
+              ) ++
+              (if (enclosingExpression.isDefined) List(Cell(id = ")", content = atomicContent(")"))) else List())
+            }
           }
         compositeContent(children, tagMod)
       })
@@ -231,7 +234,7 @@ object Cells {
       val content = compositeContent(
         List(
           fromStored(expressionView.expression)(storedExpression =>
-            compositeContent(fromExpression(storedExpression))
+            compositeContent(fromExpression(storedExpression, None))
           )
         ),
         Styles.expressionView

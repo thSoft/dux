@@ -93,11 +93,12 @@ object Render {
       <.span(
         leftSlot,
         contentSlot,
-        rightSlot
+        rightSlot,
+        ^.cls := cell.id.toString
       )
     }
 
-    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): Option[ReactElement] = {
+    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): ReactElement = {
       val menu =
         slotType match {
           case LeftSlot => cell.content.leftMenu
@@ -108,36 +109,34 @@ object Render {
               case content: CompositeContent[CellId] => None
             }
         }
-      menu.map(menuContent => {
-        val slotId = SlotId(cellId = cell.id, slotType = slotType)
-        val slot =
-          Slot(
-            id = slotId,
-            initialInput = getInitialInput(cell, slotType)
-          )
-        val onClick =
-          ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
-            event.stopPropagation()
-            val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
-            editorStateObserver.onNext(Some(newEditorState))
-          })
-        val selected = slotSelected(slotId)
-        val selectedMenu =
-          if (selected) {
-            editorState.flatMap(editorState => {
-              menu.map(menuContent => {
-                renderMenu(cell, slotType, editorState, menuContent)
-              })
-            })
-          } else None
-        <.span(
-          tagMod,
-          onClick,
-          selectedMenu,
-          Styles.slot,
-          selected ?= Styles.selectedSlot
+      val slotId = SlotId(cellId = cell.id, slotType = slotType)
+      val slot =
+        Slot(
+          id = slotId,
+          initialInput = getInitialInput(cell, slotType)
         )
-      })
+      val onClick =
+        ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+          event.stopPropagation()
+          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
+          editorStateObserver.onNext(Some(newEditorState))
+        })
+      val selected = slotSelected(slotId)
+      val selectedMenu =
+        if (selected) {
+          editorState.flatMap(editorState => {
+            menu.map(menuContent => {
+              renderMenu(cell, slotType, editorState, menuContent)
+            })
+          })
+        } else None
+      <.span(
+        tagMod,
+        onClick,
+        selectedMenu,
+        Styles.slot,
+        selected ?= Styles.selectedSlot
+      )
     }
 
     def renderMenu(cell: Cell[CellId], slotType: SlotType, editorState: EditorState[CellId], menuContent: MenuContent[CellId]): ReactElement = {

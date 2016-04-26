@@ -59,6 +59,10 @@ package object cells {
     )
   }
 
+  def atomicContent[CellId](text: String): AtomicContent[CellId] = {
+    atomicContent(<.span(text), text)
+  }
+
   def compositeContent[CellId](children: Cell[CellId]*): CompositeContent[CellId] = {
     CompositeContent(
       children = children.toList,
