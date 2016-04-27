@@ -246,7 +246,7 @@ object Cells {
               Cell(
                 storedExpressionView.firebase.child("_result").toString,
                 atomicContent(
-                  <.div("=> ", result, Styles.expressionViewResult), result
+                  <.div("=> ", result), result
                 )
               )
             )

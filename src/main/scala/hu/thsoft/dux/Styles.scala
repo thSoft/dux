@@ -33,11 +33,6 @@ object Styles extends StyleSheet.Inline {
     boxShadow := "1px 1px 1px 1px lightgray"
   )
 
-  val expressionViewResult = style(
-    border.none,
-    display.block
-  )
-
   val workspace = style(
     fontFamily(cells.Styles.font)
   )
