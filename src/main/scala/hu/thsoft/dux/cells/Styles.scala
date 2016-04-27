@@ -20,13 +20,14 @@ object Styles extends StyleSheet.Inline {
     borderRadius(3 px)
   )
 
-  val selectedCell = style(
-    boxShadow := "0 0 1px 2px #6EA3CF"
+  val selectedSlot = style(
+    boxShadow := "0 0 1px 2px #6EA3CF",
+    borderRadius(2 px)
   )
 
-  val selectedSlot = style(
+  val selectedCell = style(
     borderWidth(1 px),
-    borderColor.lightgray,
+    borderColor.gray,
     borderStyle.solid,
     borderRadius(2 px),
     padding(0 px)
@@ -34,7 +35,8 @@ object Styles extends StyleSheet.Inline {
 
   val slot = style(
     position.relative,
-    minHeight(100 %%)
+    whiteSpace.pre,
+    display.inline
   )
 
   val selectedCommand = style(

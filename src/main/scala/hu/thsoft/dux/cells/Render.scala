@@ -67,21 +67,26 @@ object Render {
     }
 
     def cellSelected(cell: Cell[CellId]): Boolean = {
-      editorState.map(_.selection.cellId == cell.id).getOrElse(false)
+      val menuDefined =
+        cell.content match {
+          case content: AtomicContent[CellId] => content.menu.isDefined
+          case _ => cell.content.leftMenu.isDefined || cell.content.rightMenu.isDefined
+        }
+      editorState.map(_.selection.cellId == cell.id && menuDefined).getOrElse(false)
     }
 
-    def slotSelected(slotId: SlotId[CellId]): Boolean = {
-      editorState.map(_.selection == slotId).getOrElse(false)
+    def slotSelected(slotId: SlotId[CellId], menu: Menu[CellId]): Boolean = {
+      editorState.map(_.selection == slotId && menu.isDefined).getOrElse(false)
     }
 
     def renderCell(cell: Cell[CellId]): ReactElement = {
-      val leftSlot = renderSlot(cell, LeftSlot, " ")
-      val rightSlot = renderSlot(cell, RightSlot, " ")
+      val leftSlot = renderSlot(cell, LeftSlot)
+      val rightSlot = renderSlot(cell, RightSlot)
       val contentSlot =
         <.span(
           cell.content match {
             case content: AtomicContent[CellId] =>
-              renderSlot(cell, ContentSlot, content.element)
+              renderSlot(cell, ContentSlot)
             case content: CompositeContent[CellId] =>
               <.span(
                 content.children.map(renderCell(_)),
@@ -98,7 +103,7 @@ object Render {
       )
     }
 
-    def renderSlot(cell: Cell[CellId], slotType: SlotType, tagMod: TagMod): ReactElement = {
+    def renderSlot(cell: Cell[CellId], slotType: SlotType): ReactElement = {
       val menu =
         slotType match {
           case LeftSlot => cell.content.leftMenu
@@ -109,6 +114,16 @@ object Render {
               case content: CompositeContent[CellId] => None
             }
         }
+      val tagMod: Option[ReactElement] =
+        slotType match {
+          case ContentSlot =>
+            cell.content match {
+              case content: AtomicContent[CellId] => Some(content.element)
+              case _ => None
+            }
+          case _ =>
+            menu.map(_ => <.span(" "))
+        }
       val slotId = SlotId(cellId = cell.id, slotType = slotType)
       val slot =
         Slot(
@@ -117,11 +132,13 @@ object Render {
         )
       val onClick =
         ^.onClick ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
-          event.stopPropagation()
-          val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
-          editorStateObserver.onNext(Some(newEditorState))
+          if (menu.isDefined) {
+            event.stopPropagation()
+            val newEditorState = makeEditorState(slot, dom.window.getSelection().focusOffset)
+            editorStateObserver.onNext(Some(newEditorState))
+          }
         })
-      val selected = slotSelected(slotId)
+      val selected = slotSelected(slotId, menu)
       val selectedMenu =
         if (selected) {
           editorState.flatMap(editorState => {

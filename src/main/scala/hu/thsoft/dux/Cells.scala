@@ -288,8 +288,11 @@ object Cells {
       compositeContent(
         List(fromStored(workspace.views)(views => {
           compositeContent(
-            views.map(view =>
-              fromExpressionView(view, storedWorkspace)
+            views.flatMap(view =>
+              List(
+                fromExpressionView(view, storedWorkspace),
+                Cell("separator", atomicContent(<.br, "\n"))
+              )
             )
           )
         })) :+ (

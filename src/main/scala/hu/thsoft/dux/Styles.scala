@@ -12,7 +12,7 @@ object Styles extends StyleSheet.Inline {
     &.hover(
       padding(0 px),
       borderWidth(1 px),
-      borderColor.gray,
+      borderColor.lightgray,
       borderStyle.solid,
       borderRadius(2 px)
     )
@@ -22,7 +22,14 @@ object Styles extends StyleSheet.Inline {
     expression
 
   val expressionView = style(
-    display.block
+    padding(2 px),
+    margin(2 px),
+    lineHeight(150 %%),
+    borderWidth(1 px),
+    borderColor.darkgray,
+    borderStyle.solid,
+    borderRadius(3 px),
+    boxShadow := "1px 1px 1px 1px lightgray"
   )
 
  val workspace = style(
