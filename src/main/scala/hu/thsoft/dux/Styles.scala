@@ -6,7 +6,7 @@ object Styles extends StyleSheet.Inline {
   import dsl._
 
   val expression = style(
-    display.inlineBlock,
+    display.inline,
     padding(1 px),
     margin(1 px),
     &.hover(
@@ -22,6 +22,7 @@ object Styles extends StyleSheet.Inline {
     expression
 
   val expressionView = style(
+    display.inlineBlock,
     padding(2 px),
     margin(2 px),
     lineHeight(150 %%),
@@ -32,7 +33,12 @@ object Styles extends StyleSheet.Inline {
     boxShadow := "1px 1px 1px 1px lightgray"
   )
 
- val workspace = style(
+  val expressionViewResult = style(
+    border.none,
+    display.block
+  )
+
+  val workspace = style(
     fontFamily(cells.Styles.font)
   )
 

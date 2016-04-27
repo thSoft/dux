@@ -25,7 +25,7 @@ object Styles extends StyleSheet.Inline {
     borderRadius(2 px)
   )
 
-  val selectedCell = style(
+  val selectedCellContent = style(
     borderWidth(1 px),
     borderColor.gray,
     borderStyle.solid,

@@ -233,9 +233,24 @@ object Cells {
     fromStored(storedExpressionView)(expressionView => {
       val content = compositeContent(
         List(
-          fromStored(expressionView.expression)(storedExpression =>
-            compositeContent(fromExpression(storedExpression, None))
-          )
+          fromStored(expressionView.expression)(storedExpression => {
+            val result =
+              Evaluate(storedExpression).result.fold(
+                failure =>
+                  s"Error: $failure",
+                success =>
+                  success.toString
+              )
+            compositeContent(
+              fromExpression(storedExpression, None),
+              Cell(
+                storedExpressionView.firebase.child("_result").toString,
+                atomicContent(
+                  <.div("=> ", result, Styles.expressionViewResult), result
+                )
+              )
+            )
+          })
         ),
         Styles.expressionView
       )
@@ -257,56 +272,58 @@ object Cells {
     })
 
   def fromWorkspace(storedWorkspace: Stored[Workspace]): Cell[String] = {
-    val getCommands: String => List[Command[String]] =
-    input => {
-      Try { input.toDouble }.toOption.map(newValue => {
-        List(
-          Command[String](
-            text = input,
-            description = "Add number literal",
-            callback = navigator => CallbackTo {
-              implicit val executionContext = ExecutionContext.global
-              val expressionsParent = new Firebase("https://thsoft.firebaseio.com/DUX/test/Expressions")
-              val newStoredExpressionFuture = for (
-                newStoredExpression <- mappings.expression.push(expressionsParent, defaultExpression(newValue));
-                expressionViewsParent = storedWorkspace.firebase.child(mappings.viewsKey);
-                expressionView = ExpressionView(expression = wrap(newStoredExpression));
-                newStoredExpressionView <- mappings.expressionView.push(expressionViewsParent, expressionView)
-              ) yield newStoredExpression
-              newStoredExpressionFuture.foreach(newStoredExpression =>
-                navigator.navigateTo(SlotId(
-                  cellId = newStoredExpression.firebase.toString,
-                  slotType = RightSlot
-                ))
-              )
-            }
+    val expressionViews = (workspace: Workspace) =>
+      List(fromStored(workspace.views)(views => {
+        compositeContent(
+          views.flatMap(view =>
+            List(
+              fromExpressionView(view, storedWorkspace),
+              Cell("separator", atomicContent(<.br, "\n"))
+            )
           )
         )
-      }).getOrElse(List())
+      }))
+    val expressionAdder = {
+      val getCommands = (input: String) => {
+        Try { input.toDouble }.toOption.map(newValue => {
+          List(
+            Command[String](
+              text = input,
+              description = "Add number literal",
+              callback = navigator => CallbackTo {
+                implicit val executionContext = ExecutionContext.global
+                val expressionsParent = new Firebase("https://thsoft.firebaseio.com/DUX/test/Expressions")
+                val newStoredExpressionFuture = for (
+                  newStoredExpression <- mappings.expression.push(expressionsParent, defaultExpression(newValue));
+                  expressionViewsParent = storedWorkspace.firebase.child(mappings.viewsKey);
+                  expressionView = ExpressionView(expression = wrap(newStoredExpression));
+                  newStoredExpressionView <- mappings.expressionView.push(expressionViewsParent, expressionView)
+                ) yield newStoredExpression
+                newStoredExpressionFuture.foreach(newStoredExpression =>
+                  navigator.navigateTo(SlotId(
+                    cellId = newStoredExpression.firebase.toString,
+                    slotType = RightSlot
+                  ))
+                )
+              }
+            )
+          )
+        }).getOrElse(List())
+      }
+      Cell(
+        id = storedWorkspace.firebase.child("_expressionAdder").toString, // XXX special id
+        content =
+          atomicContent[String](<.span("...", ^.title := "Add expression"), "").copy(menu =
+            Some(MenuContent(
+              getCommands = getCommands,
+              deleteCommand = nopCommand[String]
+            ))
+          )
+      )
     }
     fromStored(storedWorkspace)(workspace => {
       compositeContent(
-        List(fromStored(workspace.views)(views => {
-          compositeContent(
-            views.flatMap(view =>
-              List(
-                fromExpressionView(view, storedWorkspace),
-                Cell("separator", atomicContent(<.br, "\n"))
-              )
-            )
-          )
-        })) :+ (
-          Cell(
-            id = storedWorkspace.firebase.child("_append").toString, // XXX special id
-            content =
-              atomicContent[String](<.span("...", ^.title := "Add expression"), "").copy(menu =
-                Some(MenuContent(
-                  getCommands = getCommands,
-                  deleteCommand = nopCommand[String]
-                ))
-              )
-          )
-        ),
+        expressionViews(workspace) :+ expressionAdder,
         Styles.workspace
       )
     })

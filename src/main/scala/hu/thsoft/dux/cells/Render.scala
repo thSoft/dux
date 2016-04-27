@@ -82,24 +82,25 @@ object Render {
     def renderCell(cell: Cell[CellId]): ReactElement = {
       val leftSlot = renderSlot(cell, LeftSlot)
       val rightSlot = renderSlot(cell, RightSlot)
+      val contentSlotTagMod = cellSelected(cell) ?= Styles.selectedCellContent
       val contentSlot =
-        <.span(
-          cell.content match {
-            case content: AtomicContent[CellId] =>
-              renderSlot(cell, ContentSlot)
-            case content: CompositeContent[CellId] =>
-              <.span(
-                content.children.map(renderCell(_)),
-                content.tagMod
-              )
-          },
-          cellSelected(cell) ?= Styles.selectedCell
-        )
+        cell.content match {
+          case content: AtomicContent[CellId] =>
+            <.span(
+              renderSlot(cell, ContentSlot),
+              contentSlotTagMod
+            )
+          case content: CompositeContent[CellId] =>
+            <.span(
+              content.children.map(renderCell(_)),
+              content.tagMod,
+              contentSlotTagMod
+            )
+        }
       <.span(
         leftSlot,
         contentSlot,
-        rightSlot,
-        ^.cls := cell.id.toString
+        rightSlot
       )
     }
 
