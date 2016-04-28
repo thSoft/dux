@@ -3,8 +3,6 @@
 var path = require('path');
 require('shelljs/global');
 
-cd(path.join(path.dirname(process.argv[1]), '..'));
-
 var currentBranch = exec('git rev-parse --abbrev-ref HEAD', { silent:true }).output;
 var masterBranch = 'master';
 if (currentBranch != (masterBranch + '\n')) {
@@ -16,13 +14,19 @@ if (status != '') {
   echo('Working directory must be clean!');
   exit(1);
 }
+
+cd(path.dirname(process.argv[1]));
+exec('./build');
+
+cd('..');
+
 var pagesBranch = 'gh-pages';
 exec('git checkout ' + pagesBranch);
 
 exec('git checkout ' + masterBranch + ' index.html');
-cp('-Rf', 'target', '.');
 
-exec('git add -A');
-exec('git commit -am "publish"');
-//exec('git push origin ' + pagesBranch);
+exec('git add -f index.html target/scala-2.11/*.js');
+
+exec('git commit -am "Publish"');
+exec('git push origin ' + pagesBranch);
 exec('git checkout ' + masterBranch);

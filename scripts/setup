@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-cd "${0%/*}/.."
+cd "${0%/*}"
+
+npm install
+
+cd ..
 
 REPOSITORY=firebase-model
 git clone https://github.com/thSoft/$REPOSITORY.git
@@ -8,5 +12,3 @@ $REPOSITORY/scripts/build.sh
 rm -rf $REPOSITORY
 
 sbt eclipse
-
-npm install
