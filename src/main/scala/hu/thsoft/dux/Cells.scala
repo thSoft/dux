@@ -138,7 +138,8 @@ object Cells {
         val evaluation = Evaluate(storedExpression)
         val tagMod =
           (^.title := showEvaluation(evaluation)) +
-          Styles.expression
+          Styles.expression +
+          (enclosingExpression.isEmpty ?= Styles.rootExpression)
         val children =
           expression match {
             case numberLiteral: NumberLiteral =>

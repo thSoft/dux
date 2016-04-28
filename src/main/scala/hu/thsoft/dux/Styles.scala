@@ -18,6 +18,13 @@ object Styles extends StyleSheet.Inline {
     )
   )
 
+  val rootExpression = style(
+    borderWidth(1 px),
+    borderColor.darkgray,
+    borderStyle.solid,
+    borderRadius(2 px)
+  )
+
   val functionType =
     expression
 
@@ -27,7 +34,7 @@ object Styles extends StyleSheet.Inline {
     margin(2 px),
     lineHeight(150 %%),
     borderWidth(1 px),
-    borderColor.darkgray,
+    borderColor.black,
     borderStyle.solid,
     borderRadius(3 px),
     boxShadow := "1px 1px 1px 1px lightgray"
