@@ -5,3 +5,4 @@ bin/
 .settings/
 .cache-main
 .cache-tests
+node_modules/

@@ -8,3 +8,5 @@ $REPOSITORY/scripts/build.sh
 rm -rf $REPOSITORY
 
 sbt eclipse
+
+npm install
