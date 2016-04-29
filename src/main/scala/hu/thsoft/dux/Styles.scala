@@ -19,6 +19,7 @@ object Styles extends StyleSheet.Inline {
   )
 
   val rootExpression = style(
+    padding(0 px),
     borderWidth(1 px),
     borderColor.darkgray,
     borderStyle.solid,
