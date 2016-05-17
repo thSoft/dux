@@ -1,7 +1,7 @@
 package hu.thsoft.dux
 
 import hu.thsoft.firebasemodel.Mapping._
-import hu.thsoft.firebasemodel.Remote
+import hu.thsoft.firebasemodel.Stored
 
 package object types {
 

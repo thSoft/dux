@@ -18,7 +18,7 @@ import hu.thsoft.dux.cells.EditorState
 import hu.thsoft.dux.cells._
 import scala.util.Try
 import hu.thsoft.firebasemodel.Mapping
-import hu.thsoft.firebasemodel.Remote
+import hu.thsoft.firebasemodel.Stored
 import hu.thsoft.dux.Evaluate.Evaluation
 import hu.thsoft.firebase.Firebase
 import scala.concurrent.ExecutionContext
@@ -162,18 +162,18 @@ object Cells {
           (input: String) => {
             functionTypeStringValues.map(_.swap).get(input).map(functionType => {
               val storedFunctionType =
-                Remote(storedExpression.firebase, Right(functionType))
+                Stored(storedExpression.firebase, Right(functionType))
               val storedFirstArgument =
                 if (right) {
-                  Remote(storedExpression.firebase, Right(expression))
+                  Stored(storedExpression.firebase, Right(expression))
                 } else {
-                  Remote(storedExpression.firebase, Right(defaultExpression(0)))
+                  Stored(storedExpression.firebase, Right(defaultExpression(0)))
                 }
               val storedSecondArgument =
                 if (right) {
-                  Remote(storedExpression.firebase, Right(defaultExpression(0)))
+                  Stored(storedExpression.firebase, Right(defaultExpression(0)))
                 } else {
-                  Remote(storedExpression.firebase, Right(expression))
+                  Stored(storedExpression.firebase, Right(expression))
                 }
               val newValue =
                 FunctionCall(
@@ -227,7 +227,7 @@ object Cells {
   }
 
   def wrap[T](value: T): Stored[T] = {
-    Remote(new Firebase("https://thsoft.firebaseio.com"), Right(value))
+    Stored(new Firebase("https://thsoft.firebaseio.com"), Right(value))
   }
 
   def fromExpressionView(storedExpressionView: Stored[ExpressionView], storedWorkspace: Stored[Workspace]): Cell[String] =

@@ -3,6 +3,7 @@ package hu.thsoft.dux
 import hu.thsoft.dux.types._
 import hu.thsoft.firebasemodel.Mapping._
 import hu.thsoft.firebasemodel.Invalid
+import hu.thsoft.firebasemodel.Stored
 
 object Evaluate {
 
