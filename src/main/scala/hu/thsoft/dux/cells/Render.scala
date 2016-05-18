@@ -93,14 +93,14 @@ object Render {
           case content: CompositeContent[CellId] =>
             <.span(
               content.children.map(renderCell(_)),
-              content.tagMod,
               contentSlotTagMod
             )
         }
       <.span(
         leftSlot,
         contentSlot,
-        rightSlot
+        rightSlot,
+        cell.content.tagMod
       )
     }
 

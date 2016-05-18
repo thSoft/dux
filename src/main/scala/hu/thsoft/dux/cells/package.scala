@@ -34,13 +34,15 @@ package object cells {
   sealed trait CellContent[CellId] {
     def leftMenu: Menu[CellId]
     def rightMenu: Menu[CellId]
+    def tagMod: TagMod
   }
   case class AtomicContent[CellId](
     element: ReactElement,
     stringValue: String,
     menu: Menu[CellId],
     leftMenu: Menu[CellId],
-    rightMenu: Menu[CellId]
+    rightMenu: Menu[CellId],
+    tagMod: TagMod
   ) extends CellContent[CellId]
   case class CompositeContent[CellId](
     children: List[Cell[CellId]],
@@ -55,7 +57,8 @@ package object cells {
       stringValue = stringValue,
       menu = None,
       leftMenu = None,
-      rightMenu = None
+      rightMenu = None,
+      tagMod = EmptyTag
     )
   }
 

@@ -9,6 +9,29 @@ object Styles extends StyleSheet.Inline {
     _.src("local(Inconsolata), url(https://fonts.gstatic.com/s/inconsolata/v12/BjAYBlHtW3CJxDcjzrnZCIgp9Q8gbYrhqGlRav_IXfk.woff2)")
   )
 
+  val slot = style(
+    position.relative,
+    whiteSpace.pre,
+    display.inline,
+    &.hover(
+      backgroundColor(c"#99ccff")
+    )
+  )
+
+  val selectedSlot = style(
+    boxShadow := "0 0 1px 2px #6EA3CF",
+    borderRadius(2 px),
+    backgroundColor(lightblue)
+  )
+
+  val selectedCellContent = style(
+    borderWidth(1 px),
+    borderColor.gray,
+    borderStyle.solid,
+    borderRadius(2 px),
+    padding(0 px)
+  )
+
   val menu = style(
     position.absolute,
     zIndex(Int.MaxValue),
@@ -20,28 +43,9 @@ object Styles extends StyleSheet.Inline {
     borderRadius(3 px)
   )
 
-  val selectedSlot = style(
-    boxShadow := "0 0 1px 2px #6EA3CF",
-    borderRadius(2 px)
-  )
-
-  val selectedCellContent = style(
-    borderWidth(1 px),
-    borderColor.gray,
-    borderStyle.solid,
-    borderRadius(2 px),
-    padding(0 px)
-  )
-
-  val slot = style(
-    position.relative,
-    whiteSpace.pre,
-    display.inline
-  )
-
-  val selectedCommand = style(
-    color.white,
-    backgroundColor(c"#3879D9")
+  val input = style(
+    fontFamily(font),
+    fontSize(100 %%)
   )
 
   val commandDescription = style(
@@ -50,9 +54,9 @@ object Styles extends StyleSheet.Inline {
      color.lightgray
   )
 
-  val input = style(
-    fontFamily(font),
-    fontSize(100 %%)
+  val selectedCommand = style(
+    color.white,
+    backgroundColor(c"#3879D9")
   )
 
 }
