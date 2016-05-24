@@ -22,6 +22,7 @@ import hu.thsoft.firebasemodel.Stored
 import hu.thsoft.dux.Evaluate.Evaluation
 import hu.thsoft.firebase.Firebase
 import scala.concurrent.ExecutionContext
+import org.scalajs.dom.raw.HTMLElement
 
 object Cells {
 
@@ -132,26 +133,46 @@ object Cells {
     )
   }
 
+  private def findParentWithClass(className: String, element: HTMLElement): Option[HTMLElement] = {
+    if (element.parentElement == null) {
+      None
+    } else {
+      if (element.parentElement.classList.contains(className)) {
+        Some(element.parentElement)
+      } else {
+        findParentWithClass(className, element.parentElement)
+      }
+    }
+  }
+
   def fromExpression(storedExpression: Stored[Expression], enclosingExpression: Option[Stored[Expression]]): Cell[String] = {
+    val expressionClass = "expression"
     val cell =
       fromStored(storedExpression)(expression => {
         val evaluation = Evaluate(storedExpression)
         val tagMod =
           (^.title := showEvaluation(evaluation)) +
+          (^.className := expressionClass) +
           Styles.expression +
-          (enclosingExpression.isEmpty ?= Styles.rootExpression)
+          (^.onMouseOver ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+            findParentWithClass(expressionClass, event.target).foreach(_.classList.add(Styles.hoverClass))
+            event.stopPropagation()
+          })) +
+          (^.onMouseOut ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+            findParentWithClass(expressionClass, event.target).foreach(_.classList.remove(Styles.hoverClass))
+          }))
         val children =
           expression match {
             case numberLiteral: NumberLiteral =>
               List(fromDouble(numberLiteral.value))
             case functionCall: FunctionCall => {
-              (if (enclosingExpression.isDefined) List(Cell(id = "(", content = atomicContent("("))) else List()) ++
+              List(Cell(id = "(", content = atomicContent("("))) ++
               List(
                 fromExpression(functionCall.firstArgument, Some(storedExpression)),
                 fromFunctionType(functionCall.functionType),
                 fromExpression(functionCall.secondArgument, Some(storedExpression))
               ) ++
-              (if (enclosingExpression.isDefined) List(Cell(id = ")", content = atomicContent(")"))) else List())
+              List(Cell(id = ")", content = atomicContent(")")))
             }
           }
         compositeContent(children, tagMod)

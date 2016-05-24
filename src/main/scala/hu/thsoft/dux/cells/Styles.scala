@@ -25,11 +25,8 @@ object Styles extends StyleSheet.Inline {
   )
 
   val selectedCellContent = style(
-    borderWidth(1 px),
-    borderColor.gray,
-    borderStyle.solid,
-    borderRadius(2 px),
-    padding(0 px)
+    backgroundColor(c"#ddeeff"),
+    borderRadius(2 px)
   )
 
   val menu = style(

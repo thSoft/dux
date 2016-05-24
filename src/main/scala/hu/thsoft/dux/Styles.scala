@@ -5,25 +5,20 @@ import scalacss.Defaults._
 object Styles extends StyleSheet.Inline {
   import dsl._
 
+  val hoverClass = "hover"
+
   val expression = style(
     display.inline,
-    padding(1 px),
+    padding(2 px),
     margin(1 px),
-    &.hover(
-      padding(0 px),
+    unsafeRoot(s".$hoverClass")(
+      padding(1 px),
       borderWidth(1 px),
       borderColor.lightgray,
       borderStyle.solid,
-      borderRadius(2 px)
+      borderRadius(2 px),
+      backgroundColor(c"#eeeeff")
     )
-  )
-
-  val rootExpression = style(
-    padding(0 px),
-    borderWidth(1 px),
-    borderColor.darkgray,
-    borderStyle.solid,
-    borderRadius(2 px)
   )
 
   val functionType =
