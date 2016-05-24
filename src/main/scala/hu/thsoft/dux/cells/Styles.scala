@@ -12,21 +12,13 @@ object Styles extends StyleSheet.Inline {
   val slot = style(
     position.relative,
     whiteSpace.pre,
-    display.inline,
-    &.hover(
-      backgroundColor(c"#99ccff")
-    )
+    display.inline
   )
 
   val selectedSlot = style(
     boxShadow := "0 0 1px 2px #6EA3CF",
     borderRadius(2 px),
     backgroundColor(lightblue)
-  )
-
-  val selectedCellContent = style(
-    backgroundColor(c"#ddeeff"),
-    borderRadius(2 px)
   )
 
   val menu = style(

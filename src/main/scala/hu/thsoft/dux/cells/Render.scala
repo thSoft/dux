@@ -45,7 +45,7 @@ object Render {
       }
       val contentSlotList =
         cell.content match {
-          case content: AtomicContent[CellId] => slotList(content.menu, ContentSlot)
+          case content: AtomicContent[CellId] => slotList(content.menu, MainSlot)
           case content: CompositeContent[CellId] => content.children.flatMap(child => makeSlotList(child))
         }
       val leftSlotList = slotList(cell.content.leftMenu, LeftSlot)
@@ -56,7 +56,7 @@ object Render {
     def getInitialInput(cell: Cell[CellId], slotType: SlotType): String = {
       slotType match {
         case LeftSlot => ""
-        case ContentSlot => {
+        case MainSlot => {
           cell.content match {
             case content: AtomicContent[CellId] => content.stringValue
             case content: CompositeContent[CellId] => ""
@@ -82,23 +82,10 @@ object Render {
     def renderCell(cell: Cell[CellId]): ReactElement = {
       val leftSlot = renderSlot(cell, LeftSlot)
       val rightSlot = renderSlot(cell, RightSlot)
-      val contentSlotTagMod = cellSelected(cell) ?= Styles.selectedCellContent
-      val contentSlot =
-        cell.content match {
-          case content: AtomicContent[CellId] =>
-            <.span(
-              renderSlot(cell, ContentSlot),
-              contentSlotTagMod
-            )
-          case content: CompositeContent[CellId] =>
-            <.span(
-              content.children.map(renderCell(_)),
-              contentSlotTagMod
-            )
-        }
+      val mainSlot = renderSlot(cell, MainSlot)
       <.span(
         leftSlot,
-        contentSlot,
+        mainSlot,
         rightSlot,
         cell.content.tagMod
       )
@@ -109,19 +96,26 @@ object Render {
         slotType match {
           case LeftSlot => cell.content.leftMenu
           case RightSlot => cell.content.rightMenu
-          case ContentSlot =>
+          case MainSlot =>
             cell.content match {
               case content: AtomicContent[CellId] => content.menu
               case content: CompositeContent[CellId] => None
             }
         }
-      val tagMod: Option[ReactElement] =
+      val element: Option[ReactElement] =
         slotType match {
-          case ContentSlot =>
-            cell.content match {
-              case content: AtomicContent[CellId] => Some(content.element)
-              case _ => None
-            }
+          case MainSlot =>
+            Some(
+              cell.content match {
+                case content: AtomicContent[CellId] =>
+                  content.element
+                case content: CompositeContent[CellId] =>
+                  <.span(
+                    content.children.map(renderCell(_)),
+                    content.mainSlotTagMod
+                  )
+              }
+            )
           case _ =>
             menu.map(_ => <.span(" "))
         }
@@ -149,7 +143,7 @@ object Render {
           })
         } else None
       <.span(
-        tagMod,
+        element,
         onClick,
         selectedMenu,
         Styles.slot,

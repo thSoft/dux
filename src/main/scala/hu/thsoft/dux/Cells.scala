@@ -175,7 +175,7 @@ object Cells {
               List(Cell(id = ")", content = atomicContent(")")))
             }
           }
-        compositeContent(children, tagMod)
+        compositeContent(children).copy(tagMod = tagMod)
       })
     def sideMenu(right: Boolean): Menu[String] = {
       storedExpression.value.right.toOption.map(expression => {
@@ -215,7 +215,7 @@ object Cells {
                     navigator.navigateTo(SlotId(
                       cellId =
                         Mapping.valueChild(expressionValueId.child(childKey)).child(mappings.valueKey).toString, // XXX this is hardcoded and unchecked
-                      slotType = ContentSlot
+                      slotType = MainSlot
                     ))
                   }
                 )
@@ -227,7 +227,7 @@ object Cells {
             mappings.expression.set(storedExpression.firebase, defaultExpression(0))
             navigator.navigateTo(SlotId(
               cellId = Mapping.valueChild(storedExpression.firebase).child(mappings.valueKey).toString,
-              slotType = ContentSlot
+              slotType = MainSlot
             ))
           }
         MenuContent(
@@ -253,29 +253,26 @@ object Cells {
 
   def fromExpressionView(storedExpressionView: Stored[ExpressionView], storedWorkspace: Stored[Workspace]): Cell[String] =
     fromStored(storedExpressionView)(expressionView => {
-      val content = compositeContent(
-        List(
-          fromStored(expressionView.expression)(storedExpression => {
-            val result =
-              Evaluate(storedExpression).result.fold(
-                failure =>
-                  s"Error: $failure",
-                success =>
-                  success.toString
-              )
-            compositeContent(
-              fromExpression(storedExpression, None),
-              Cell(
-                storedExpressionView.firebase.child("_result").toString,
-                atomicContent(
-                  <.div("=> ", result), result
-                )
+      val content = compositeContent(List(
+        fromStored(expressionView.expression)(storedExpression => {
+          val result =
+            Evaluate(storedExpression).result.fold(
+              failure =>
+                s"Error: $failure",
+              success =>
+                success.toString
+            )
+          compositeContent(List(
+            fromExpression(storedExpression, None),
+            Cell(
+              storedExpressionView.firebase.child("_result").toString,
+              atomicContent(
+                <.div("=> ", result), result
               )
             )
-          })
-        ),
-        Styles.expressionView
-      )
+          ))
+        })
+      )).copy(mainSlotTagMod = Styles.expressionView)
       val menu =
         Some(MenuContent(
           getCommands = input => List(),
@@ -345,9 +342,8 @@ object Cells {
     }
     fromStored(storedWorkspace)(workspace => {
       compositeContent(
-        expressionViews(workspace) :+ expressionAdder,
-        Styles.workspace
-      )
+        expressionViews(workspace) :+ expressionAdder
+      ).copy(tagMod = Styles.workspace)
     })
   }
 

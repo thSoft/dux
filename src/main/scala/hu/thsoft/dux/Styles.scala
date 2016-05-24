@@ -5,7 +5,7 @@ import scalacss.Defaults._
 object Styles extends StyleSheet.Inline {
   import dsl._
 
-  val hoverClass = "hover"
+  val hoverClass = "hoveredExpression"
 
   val expression = style(
     display.inline,

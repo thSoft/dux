@@ -46,6 +46,7 @@ package object cells {
   ) extends CellContent[CellId]
   case class CompositeContent[CellId](
     children: List[Cell[CellId]],
+    mainSlotTagMod: TagMod,
     tagMod: TagMod,
     leftMenu: Menu[CellId],
     rightMenu: Menu[CellId]
@@ -66,19 +67,11 @@ package object cells {
     atomicContent(<.span(text), text)
   }
 
-  def compositeContent[CellId](children: Cell[CellId]*): CompositeContent[CellId] = {
-    CompositeContent(
-      children = children.toList,
-      tagMod = EmptyTag,
-      leftMenu = None,
-      rightMenu = None
-    )
-  }
-
-  def compositeContent[CellId](children: List[Cell[CellId]], tagMod: TagMod = EmptyTag): CompositeContent[CellId] = {
+  def compositeContent[CellId](children: List[Cell[CellId]]): CompositeContent[CellId] = {
     CompositeContent(
       children = children,
-      tagMod = tagMod,
+      mainSlotTagMod = EmptyTag,
+      tagMod = EmptyTag,
       leftMenu = None,
       rightMenu = None
     )
@@ -119,7 +112,7 @@ package object cells {
 
   sealed trait SlotType
   case object LeftSlot extends SlotType
-  case object ContentSlot extends SlotType
+  case object MainSlot extends SlotType
   case object RightSlot extends SlotType
 
   case class EditorState[CellId](
