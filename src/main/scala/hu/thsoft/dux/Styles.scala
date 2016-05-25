@@ -7,6 +7,8 @@ object Styles extends StyleSheet.Inline {
 
   val hoverClass = "hoveredExpression"
 
+  val selectedBackgroundColor = backgroundColor(c"#f0f0ff")
+
   val expression = style(
     display.inline,
     padding(2 px),
@@ -20,8 +22,9 @@ object Styles extends StyleSheet.Inline {
       backgroundColor(c"#eeeeff")
     ),
     unsafeExt(selector => s"$selector.${cells.Styles.selectedCellClass}")(
+      boxShadow := "0 0 1px 1px #dddddd",
       borderRadius(2 px),
-      backgroundColor(c"#f0f0ff")
+      selectedBackgroundColor
     )
   )
 
@@ -39,7 +42,7 @@ object Styles extends StyleSheet.Inline {
     borderRadius(3 px),
     boxShadow := "1px 1px 1px 1px lightgray",
     unsafeExt(selector => s".${cells.Styles.selectedCellClass} $selector")(
-      backgroundColor(c"#f0f0ff")
+      selectedBackgroundColor
     )
   )
 
