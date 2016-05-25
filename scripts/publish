@@ -20,12 +20,22 @@ exec('./build');
 
 cd('..');
 
+var target = 'target';
+var temp = 'temp';
+mv(target, temp);
+exec('git stash --include-untracked');
+
 var pagesBranch = 'gh-pages';
 exec('git checkout ' + pagesBranch);
 
-exec('git checkout ' + masterBranch + ' index.html');
+var mainSite = 'index.html';
+exec('git checkout ' + masterBranch + ' ' + mainSite);
+exec('git stash pop');
+rm('-rf', target);
+mv(temp, target);
 
-exec('git add -f index.html target/scala-2.11/*.js');
+var compiledJavaScripts = target + '/scala-2.11/*.js';
+exec('git add -f ' + mainSite + ' ' + compiledJavaScripts);
 
 exec('git commit -am "Publish"');
 exec('git push origin ' + pagesBranch);
