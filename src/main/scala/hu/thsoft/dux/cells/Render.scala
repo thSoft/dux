@@ -87,7 +87,8 @@ object Render {
         leftSlot,
         mainSlot,
         rightSlot,
-        cell.content.tagMod
+        cell.content.tagMod,
+        cellSelected(cell) ?= ^.classSet1(Styles.selectedCellClass)
       )
     }
 

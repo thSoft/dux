@@ -18,6 +18,10 @@ object Styles extends StyleSheet.Inline {
       borderStyle.solid,
       borderRadius(2 px),
       backgroundColor(c"#eeeeff")
+    ),
+    unsafeExt(selector => s"$selector.${cells.Styles.selectedCellClass}")(
+      borderRadius(2 px),
+      backgroundColor(c"#f0f0ff")
     )
   )
 
@@ -33,7 +37,10 @@ object Styles extends StyleSheet.Inline {
     borderColor.black,
     borderStyle.solid,
     borderRadius(3 px),
-    boxShadow := "1px 1px 1px 1px lightgray"
+    boxShadow := "1px 1px 1px 1px lightgray",
+    unsafeExt(selector => s".${cells.Styles.selectedCellClass} $selector")(
+      backgroundColor(c"#f0f0ff")
+    )
   )
 
   val workspace = style(

@@ -9,6 +9,8 @@ object Styles extends StyleSheet.Inline {
     _.src("local(Inconsolata), url(https://fonts.gstatic.com/s/inconsolata/v12/BjAYBlHtW3CJxDcjzrnZCIgp9Q8gbYrhqGlRav_IXfk.woff2)")
   )
 
+  val selectedCellClass = "selectedCell"
+
   val slot = style(
     position.relative,
     whiteSpace.pre,
