@@ -143,12 +143,20 @@ object Render {
             })
           })
         } else None
+      val hoverable =
+        (^.onMouseOver ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+          event.target.classList.add(Styles.hoveredSlotClass)
+        })) +
+        (^.onMouseOut ==> ((event: SyntheticMouseEvent[HTMLElement]) => Callback {
+          event.target.classList.remove(Styles.hoveredSlotClass)
+        }))
       <.span(
         element,
         onClick,
         selectedMenu,
         Styles.slot,
-        selected ?= Styles.selectedSlot
+        selected ?= Styles.selectedSlot,
+        menu.isDefined ?= hoverable
       )
     }
 

@@ -11,10 +11,16 @@ object Styles extends StyleSheet.Inline {
 
   val selectedCellClass = "selectedCell"
 
+  val hoveredSlotClass = "hoveredSlot"
+
   val slot = style(
     position.relative,
     whiteSpace.pre,
-    display.inline
+    display.inline,
+    unsafeExt(selector => s"$selector > .$hoveredSlotClass")(
+      boxShadow := "0 0 1px 1px #6EA3CF",
+      borderRadius(2 px)
+    )
   )
 
   val selectedSlot = style(
